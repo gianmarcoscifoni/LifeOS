@@ -6,6 +6,7 @@ import { Sidebar } from '@/components/shared/Sidebar';
 import { BottomNav } from '@/components/shared/BottomNav';
 import { NebulaBackground } from '@/components/shared/NebulaBackground';
 import { VoiceOrb } from '@/components/voice/VoiceOrb';
+import { LetMeCook } from '@/components/shared/LetMeCook';
 
 // Syne — ultra-sharp, futuristic headings (Zara / Apple vibes)
 const syne = Syne({
@@ -53,6 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
           <BottomNav />
           <VoiceOrb />
+          <LetMeCook />
         </Providers>
       </body>
     </html>

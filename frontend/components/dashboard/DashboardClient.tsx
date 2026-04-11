@@ -1,7 +1,9 @@
 'use client';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Briefcase, DollarSign, FileText, Zap } from 'lucide-react';
+import { Activity, Briefcase, DollarSign, FileText, Mic, Zap } from 'lucide-react';
 import { XpBar } from '@/components/brand/XpBar';
+import { loadVoiceSessions, loadAreaStreaks, type AreaStreak } from '@/lib/voiceSession';
 
 interface DashboardOverview {
   brand: {
@@ -56,6 +58,15 @@ export function DashboardClient({ data }: { data: DashboardOverview | null }) {
     ? Math.min(100, Math.round((data.brand.currentLevelXp / data.brand.xpToNextLevel) * 100))
     : 0;
   const tierColor = data ? (TIER_COLOR[data.brand.tier] ?? '#9333EA') : '#9333EA';
+
+  const [latestCoaching, setLatestCoaching] = useState<string | null>(null);
+  const [areaStreaks, setAreaStreaks] = useState<AreaStreak[]>([]);
+
+  useEffect(() => {
+    const sessions = loadVoiceSessions();
+    if (sessions[0]) setLatestCoaching(sessions[0].coachingMessage);
+    setAreaStreaks(loadAreaStreaks().filter(s => s.currentStreak >= 2));
+  }, []);
 
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
@@ -160,6 +171,51 @@ export function DashboardClient({ data }: { data: DashboardOverview | null }) {
           accent="#F0C96E"
         />
       </motion.div>
+
+      {/* Voice coaching banner */}
+      {latestCoaching && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+          className="glass p-5"
+          style={{ borderRadius: '1.25rem', borderColor: 'rgba(147,51,234,0.25)' }}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <Mic size={14} style={{ color: '#9333EA' }} />
+            <span className="text-xs font-semibold tracking-widest uppercase" style={{ color: 'rgba(192,132,252,0.7)' }}>
+              Voice Coach
+            </span>
+          </div>
+          <p className="text-sm font-inter leading-relaxed" style={{ color: 'rgba(226,232,240,0.75)' }}>
+            {latestCoaching}
+          </p>
+        </motion.div>
+      )}
+
+      {/* Area streaks from voice sessions */}
+      {areaStreaks.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.42 }}
+          className="flex gap-2 flex-wrap"
+        >
+          {areaStreaks.slice(0, 5).map(s => (
+            <div
+              key={s.area}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold"
+              style={{
+                background: 'rgba(147,51,234,0.1)',
+                border: '1px solid rgba(147,51,234,0.2)',
+                color: '#C084FC',
+              }}
+            >
+              🔥 {s.area} · {s.currentStreak}d
+            </div>
+          ))}
+        </motion.div>
+      )}
 
       {/* Career milestones bar */}
       {data && data.career.totalMilestones > 0 && (

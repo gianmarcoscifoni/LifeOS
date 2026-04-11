@@ -2,10 +2,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, Volume2, X } from 'lucide-react';
+import type { TranscriptAnalysisDto } from '@/lib/api';
+import { saveVoiceSession, updateAreaStreaks } from '@/lib/voiceSession';
+import { TranscriptReveal } from './TranscriptReveal';
 
 type VoiceState = 'idle' | 'listening' | 'thinking' | 'speaking';
 
-// Web Speech API types (not in all TS lib configs)
+// Web Speech API types
 declare global {
   interface Window {
     SpeechRecognition: new () => SpeechRecognitionInstance;
@@ -21,12 +24,28 @@ declare global {
     onresult: ((e: SpeechRecognitionEvent) => void) | null;
     onend: (() => void) | null;
   }
+  interface SpeechRecognitionResultList {
+    readonly length: number;
+    item(index: number): SpeechRecognitionResult;
+    [index: number]: SpeechRecognitionResult;
+  }
+  interface SpeechRecognitionResult {
+    readonly isFinal: boolean;
+    readonly length: number;
+    item(index: number): SpeechRecognitionAlternative;
+    [index: number]: SpeechRecognitionAlternative;
+  }
+  interface SpeechRecognitionAlternative {
+    readonly transcript: string;
+    readonly confidence: number;
+  }
   interface SpeechRecognitionEvent extends Event {
-    results: SpeechRecognitionResultList;
+    readonly resultIndex: number;
+    readonly results: SpeechRecognitionResultList;
   }
 }
 
-interface Message { role: 'user' | 'assistant'; text: string }
+interface Message { role: 'user' | 'assistant'; content: string }
 
 const WAVEFORM_BARS = 24;
 
@@ -37,13 +56,25 @@ export function VoiceOrb() {
   const [bars, setBars] = useState<number[]>(Array(WAVEFORM_BARS).fill(2));
   const [open, setOpen] = useState(false);
   const [supported, setSupported] = useState(true);
+  const [analysis, setAnalysis] = useState<TranscriptAnalysisDto | null>(null);
+  const [revealTranscript, setRevealTranscript] = useState('');
+  const [showReveal, setShowReveal] = useState(false);
 
-  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-  const synthRef = useRef<SpeechSynthesis | null>(null);
-  const animFrameRef = useRef<number>(0);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const recognitionRef    = useRef<SpeechRecognitionInstance | null>(null);
+  const synthRef          = useRef<SpeechSynthesis | null>(null);
+  const animFrameRef      = useRef<number>(0);
+  const analyserRef       = useRef<AnalyserNode | null>(null);
+  const audioCtxRef       = useRef<AudioContext | null>(null);
+  const streamRef         = useRef<MediaStream | null>(null);
+  // Refs to escape stale closures in speech recognition callbacks
+  const transcriptRef     = useRef('');
+  const historyRef        = useRef<Message[]>([]);
+  const handleSendRef     = useRef<(text: string) => void>(() => {});
+  const shouldRestartRef  = useRef(false);
+
+  // Keep refs in sync with state
+  useEffect(() => { transcriptRef.current = transcript; }, [transcript]);
+  useEffect(() => { historyRef.current = messages; }, [messages]);
 
   useEffect(() => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -52,22 +83,38 @@ export function VoiceOrb() {
     const recognition = new SR();
     recognition.lang = 'it-IT';
     recognition.interimResults = true;
-    recognition.continuous = false;
+    recognition.continuous = true;
 
     recognition.onresult = (e: SpeechRecognitionEvent) => {
-      const result = Array.from(e.results)
-        .map(r => r[0].transcript)
-        .join('');
-      setTranscript(result);
+      let interim = '';
+      let final = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) final += r[0].transcript;
+        else interim += r[0].transcript;
+      }
+      if (final) {
+        const text = final.trim();
+        // Reset interim display and fire backend call
+        setTranscript('');
+        transcriptRef.current = '';
+        handleSendRef.current(text);
+      } else {
+        setTranscript(interim);
+        transcriptRef.current = interim;
+      }
     };
 
     recognition.onend = () => {
-      stopAudioAnalysis();
-      if (transcript.trim()) {
-        handleSend(transcript.trim());
-      } else {
-        setState('idle');
+      // With continuous: true, onend fires only on unexpected stop or explicit stop
+      if (shouldRestartRef.current) {
+        try { recognition.start(); } catch { /* already running */ }
+        return;
       }
+      stopAudioAnalysis();
+      setState('idle');
+      setTranscript('');
+      transcriptRef.current = '';
     };
 
     recognitionRef.current = recognition;
@@ -99,7 +146,8 @@ export function VoiceOrb() {
       audioCtxRef.current = ctx;
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
-      analyser.fftSize = 64;
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.75;
       source.connect(analyser);
       analyserRef.current = analyser;
       animateBars();
@@ -129,22 +177,27 @@ export function VoiceOrb() {
   function startListening() {
     if (!recognitionRef.current || state !== 'idle') return;
     setTranscript('');
+    transcriptRef.current = '';
+    shouldRestartRef.current = true;
     setState('listening');
     recognitionRef.current.start();
     startAudioAnalysis();
   }
 
   function stopListening() {
+    shouldRestartRef.current = false;
     recognitionRef.current?.stop();
     stopAudioAnalysis();
   }
 
   function stopAll() {
+    shouldRestartRef.current = false;
     recognitionRef.current?.abort();
     synthRef.current?.cancel();
     stopAudioAnalysis();
     setState('idle');
     setTranscript('');
+    transcriptRef.current = '';
   }
 
   const speak = useCallback((text: string) => {
@@ -155,7 +208,6 @@ export function VoiceOrb() {
     utt.rate = 0.95;
     utt.pitch = 1.0;
 
-    // Pick an Italian voice if available
     const voices = synthRef.current.getVoices();
     const itVoice = voices.find(v => v.lang.startsWith('it')) ?? voices.find(v => v.lang.startsWith('en'));
     if (itVoice) utt.voice = itVoice;
@@ -165,16 +217,22 @@ export function VoiceOrb() {
     synthRef.current.speak(utt);
   }, []);
 
-  async function handleSend(text: string) {
+  const handleSend = useCallback(async (text: string) => {
     setState('thinking');
-    setMessages(prev => [...prev, { role: 'user', text }]);
+    setMessages(prev => [...prev, { role: 'user', content: text }]);
     setTranscript('');
+
+    // Snapshot of prior turns (before current user message)
+    const historySnapshot = historyRef.current;
 
     try {
       const res = await fetch('/api/proxy/claude/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, history: [] }),
+        body: JSON.stringify({
+          message: text,
+          history: historySnapshot,
+        }),
       });
 
       if (!res.ok || !res.body) throw new Error();
@@ -204,15 +262,43 @@ export function VoiceOrb() {
       }
 
       const reply = fullReply || 'Scusa, non ho ricevuto risposta dal backend.';
-      setMessages(prev => [...prev, { role: 'assistant', text: reply }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
       speak(reply);
+
+      // Fire-and-forget transcript analysis (only for substantial utterances)
+      if (text.length > 20) {
+        fetch('/api/proxy/claude/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transcript: text }),
+        })
+          .then(r => r.json())
+          .then((a: TranscriptAnalysisDto) => {
+            setAnalysis(a);
+            setRevealTranscript(text);
+            setShowReveal(true);
+            saveVoiceSession({
+              id: Date.now().toString(),
+              date: new Date().toISOString().split('T')[0],
+              timestamp: new Date().toISOString(),
+              transcript: text,
+              analysis: a,
+              coachingMessage: a.coaching_message,
+            });
+            updateAreaStreaks(a);
+          })
+          .catch(() => {});
+      }
 
     } catch {
       const err = 'Errore di connessione al backend.';
-      setMessages(prev => [...prev, { role: 'assistant', text: err }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: err }]);
       speak(err);
     }
-  }
+  }, [speak]);
+
+  // Keep handleSendRef in sync so recognition.onresult can always call the latest version
+  useEffect(() => { handleSendRef.current = handleSend; }, [handleSend]);
 
   const stateColor = {
     idle: '#9333EA',
@@ -357,13 +443,13 @@ export function VoiceOrb() {
                   ))}
                 </div>
 
-                {/* Live transcript */}
+                {/* Live transcript (interim) */}
                 {transcript && (
                   <motion.p
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     className="text-sm font-inter text-center px-6 max-w-xs"
-                    style={{ color: 'rgba(226,232,240,0.7)' }}
+                    style={{ color: 'rgba(226,232,240,0.5)' }}
                   >
                     {transcript}
                   </motion.p>
@@ -391,7 +477,7 @@ export function VoiceOrb() {
                             color: '#86EFAC',
                           }}
                         >
-                          {m.text}
+                          {m.content}
                         </div>
                       </div>
                     ))}
@@ -400,6 +486,17 @@ export function VoiceOrb() {
               )}
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Transcript reveal overlay */}
+      <AnimatePresence>
+        {showReveal && analysis && (
+          <TranscriptReveal
+            transcript={revealTranscript}
+            analysis={analysis}
+            onClose={() => setShowReveal(false)}
+          />
         )}
       </AnimatePresence>
     </>

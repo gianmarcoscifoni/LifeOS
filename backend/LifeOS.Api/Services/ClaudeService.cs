@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using LifeOS.Api.Data;
+using LifeOS.Api.DTOs;
 
 namespace LifeOS.Api.Services;
 
@@ -11,10 +12,10 @@ public class ClaudeService(HttpClient http, LifeOsDbContext db, IConfiguration c
     private const string ApiUrl = "https://api.anthropic.com/v1/messages";
     private const string Model   = "claude-sonnet-4-20250514";
 
-    public async Task<string> Ask(string question)
+    public async Task<string> Ask(string question, List<MessageDto>? history = null)
     {
         var context = await BuildContext();
-        var body = BuildRequestBody(question, context, stream: false);
+        var body = BuildRequestBody(question, context, stream: false, history);
         var response = await SendRequest(body);
         var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
@@ -24,10 +25,10 @@ public class ClaudeService(HttpClient http, LifeOsDbContext db, IConfiguration c
             .GetString() ?? string.Empty;
     }
 
-    public async IAsyncEnumerable<string> AskStream(string question)
+    public async IAsyncEnumerable<string> AskStream(string question, List<MessageDto>? history = null)
     {
         var context = await BuildContext();
-        var body = BuildRequestBody(question, context, stream: true);
+        var body = BuildRequestBody(question, context, stream: true, history);
         var response = await SendRequest(body);
 
         using var stream = await response.Content.ReadAsStreamAsync();
@@ -54,19 +55,79 @@ public class ClaudeService(HttpClient http, LifeOsDbContext db, IConfiguration c
         return await Ask($"Genera la mia review settimanale basata su questi dati: {summary}");
     }
 
-    private static object BuildRequestBody(string question, string context, bool stream) => new
+    public async Task<TranscriptAnalysisDto> AnalyzeTranscript(string transcript)
     {
-        model = Model,
-        max_tokens = 2000,
-        stream,
-        system = $"""
-            Sei il consigliere AI di Gianmarco, ingegnere con il progetto Digital Aura.
-            Rispondi in italiano con ironia romana — diretto, concreto, un filo caustico.
-            Ecco il contesto completo del suo LifeOS:
-            {context}
-            """,
-        messages = new[] { new { role = "user", content = question } },
-    };
+        var body = new
+        {
+            model = Model,
+            max_tokens = 1000,
+            stream = false,
+            system = "Sei un analizzatore di testo. Rispondi SOLO con JSON valido, nessun testo extra, nessun markdown.",
+            messages = new[]
+            {
+                new
+                {
+                    role = "user",
+                    content = $$"""
+                        Analizza questa trascrizione vocale. Rispondi SOLO con questo JSON (nessun testo aggiuntivo, nessun markdown):
+                        {
+                          "keywords": ["parola1", "parola2"],
+                          "topics": [{"text":"...","area":"career|habits|finance|health|brand","icon":"emoji","confidence":0.9}],
+                          "goals": [{"title":"...","area":"career","priority":"high|medium|low","due_hint":"questa settimana|questo mese|null"}],
+                          "mood": "great|good|neutral|low|terrible",
+                          "gratitude": ["cosa1"],
+                          "coaching_message": "Una frase motivazionale in italiano, max 2 frasi."
+                        }
+                        Trascrizione: {{transcript}}
+                        """,
+                },
+            },
+        };
+
+        var response = await SendRequest(body);
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        var raw = doc.RootElement
+            .GetProperty("content")[0]
+            .GetProperty("text")
+            .GetString() ?? "{}";
+
+        // Strip markdown code fences if Claude adds them
+        var cleaned = raw.Trim();
+        if (cleaned.StartsWith("```"))
+        {
+            cleaned = cleaned[(cleaned.IndexOf('\n') + 1)..];
+            cleaned = cleaned[..cleaned.LastIndexOf("```")].Trim();
+        }
+
+        return JsonSerializer.Deserialize<TranscriptAnalysisDto>(
+            cleaned,
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            ?? throw new InvalidOperationException("Failed to parse transcript analysis response.");
+    }
+
+    private object BuildRequestBody(string question, string context, bool stream, List<MessageDto>? history = null)
+    {
+        var messages = new List<object>();
+        if (history != null)
+            foreach (var m in history)
+                messages.Add(new { role = m.Role, content = m.Content });
+        messages.Add(new { role = "user", content = question });
+
+        return new
+        {
+            model = Model,
+            max_tokens = 2000,
+            stream,
+            system = $"""
+                Sei il consigliere AI di Gianmarco, ingegnere con il progetto Digital Aura.
+                Rispondi in italiano con ironia romana — diretto, concreto, un filo caustico.
+                Ecco il contesto completo del suo LifeOS:
+                {context}
+                """,
+            messages,
+        };
+    }
 
     private async Task<HttpResponseMessage> SendRequest(object body)
     {

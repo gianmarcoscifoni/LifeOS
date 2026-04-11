@@ -120,9 +120,15 @@ export const useHabitStore = create<HabitStore>((set) => ({
 interface UiStore {
   sidebarOpen: boolean;
   toggleSidebar: () => void;
+  loadingCount: number;
+  startLoading: () => void;
+  stopLoading: () => void;
 }
 
 export const useUiStore = create<UiStore>((set) => ({
   sidebarOpen: true,
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+  loadingCount: 0,
+  startLoading: () => set((s) => ({ loadingCount: s.loadingCount + 1 })),
+  stopLoading: () => set((s) => ({ loadingCount: Math.max(0, s.loadingCount - 1) })),
 }));
