@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# .NET
+backend/**/bin/
+backend/**/obj/
+*.user
+*.suo
+.vs/
+
+# Node
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env*.local
+
+# Env files with secrets (never commit)
+**/.env.local
+**/appsettings.Production.json
+
+# Claude local settings
+.claude/settings.json

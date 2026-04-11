@@ -1,0 +1,47 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:authjs.dev)",
+      "WebFetch(domain:www.npgsql.org)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:docs.dndkit.com)",
+      "WebFetch(domain:platform.claude.ai)",
+      "WebFetch(domain:duendesoftware.com)",
+      "Bash(mkdir -p backend)",
+      "Bash(dotnet new:*)",
+      "Bash(dotnet add:*)",
+      "Bash(dotnet nuget:*)",
+      "Read(//Users/gianmarcoscifoni/.nuget/packages/**)",
+      "Bash(dotnet --version)",
+      "Bash(dotnet restore:*)",
+      "Bash(dotnet build:*)",
+      "Bash(npm --version)",
+      "Bash(npx --yes create-next-app@latest frontend --typescript --tailwind --app --src-dir=false --import-alias=\"@/*\" --no-eslint)",
+      "Bash(npm install:*)",
+      "Bash(npx shadcn@latest init --defaults)",
+      "Bash(npx shadcn@latest add card dialog tabs skeleton badge progress separator)",
+      "Bash(node -e \"const p = require\\('/Users/gianmarcoscifoni/Desktop/LifeOS/frontend/node_modules/next/package.json'\\); console.log\\(p.version\\)\")",
+      "Bash(npm run:*)",
+      "Bash(node -e \"const pkg = require\\('./node_modules/next-auth/package.json'\\); console.log\\(pkg.version\\)\")",
+      "Bash(pkill -f \"next dev\")",
+      "WebSearch",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:daltonwalsh.com)",
+      "WebFetch(domain:levitation.in)",
+      "WebFetch(domain:ui.aceternity.com)",
+      "WebFetch(domain:dev.to)",
+      "Bash(psql --version)",
+      "Bash(pg_isready)",
+      "Bash(dotnet ef:*)",
+      "Bash(PGPASSWORD=xKgMbUNovswjYYFlHkQDSNGOUDlRihTf psql \"host=metro.proxy.rlwy.net port=27634 dbname=railway user=postgres sslmode=require\" -c \"\\\\dt\")",
+      "Bash(PGPASSWORD=xKgMbUNovswjYYFlHkQDSNGOUDlRihTf psql \"host=metro.proxy.rlwy.net port=27634 dbname=railway user=postgres sslmode=require\" -f /Users/gianmarcoscifoni/Desktop/LifeOS/backend/LifeOS.Api/Data/seed.sql)",
+      "Bash(railway --version)",
+      "Bash(rm -rf frontend/.git)",
+      "Bash(git rm:*)",
+      "Bash(git add:*)"
+    ],
+    "additionalDirectories": [
+      "/Users/gianmarcoscifoni/Desktop/LifeOS/frontend/app/api/proxy"
+    ]
+  }
+}
