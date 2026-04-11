@@ -6,6 +6,9 @@ using LifeOS.Api.Endpoints;
 using LifeOS.Api.Middleware;
 using LifeOS.Api.Services;
 
+// Treat all DateTime as UTC — avoids Npgsql "Kind=Unspecified" errors
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
     .CreateBootstrapLogger();

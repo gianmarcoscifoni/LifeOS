@@ -22,7 +22,7 @@ public static class DashboardEndpoints
                 var profile = await db.BrandProfiles.FirstOrDefaultAsync();
                 var finance = await db.Finances.FirstOrDefaultAsync();
                 var today   = DateOnly.FromDateTime(DateTime.UtcNow);
-                var thisMonth = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+                var thisMonth = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
 
                 var activeGoals    = await db.Goals.CountAsync(g => g.Status == "in_progress");
                 var completedGoals = await db.Goals.CountAsync(g => g.Status == "completed");
