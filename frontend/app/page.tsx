@@ -1,46 +1,55 @@
 import { DashboardClient } from '@/components/dashboard/DashboardClient';
 
-interface DashboardOverview {
-  brand: {
-    codename: string;
-    level: number;
-    tier: string;
-    totalXp: number;
-    xpToNextLevel: number;
-    currentLevelXp: number;
-  };
-  habits: {
-    totalHabits: number;
-    completedToday: number;
-    longestStreak: number;
-  };
-  career: {
-    activeGoals: number;
-    totalMilestones: number;
-    completedMilestones: number;
-  };
-  finance: {
-    currentRal: number;
-    targetRal: number;
-    monthlySavings: number;
-  };
-  content: {
-    queueSize: number;
-    publishedThisMonth: number;
-    readyToPublish: number;
-  };
-}
+async function getDashboard() {
+  // Use internal proxy (server-side, picks up API_BASE_URL + API_SECRET_KEY)
+  const base = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : process.env.NEXT_PUBLIC_API_URL
+    ? `${process.env.NEXT_PUBLIC_API_URL}`  // direct when no proxy needed
+    : 'http://localhost:3000';
 
-async function getDashboard(): Promise<DashboardOverview | null> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-  const apiKey = process.env.NEXT_PUBLIC_API_KEY || 'lifeos-dev-key';
+  // Hit backend directly from server component — no proxy hop needed
+  const apiUrl = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+  const apiKey = process.env.API_SECRET_KEY || process.env.NEXT_PUBLIC_API_KEY || 'lifeos-dev-key';
+
   try {
     const res = await fetch(`${apiUrl}/api/dashboard/overview`, {
       headers: { 'X-Api-Key': apiKey },
       next: { revalidate: 60 },
     });
     if (!res.ok) return null;
-    return res.json();
+    const raw = await res.json();
+    // Normalise to camelCase for DashboardClient
+    return {
+      brand: {
+        codename:       raw.brand?.codename       ?? raw.brand?.Codename       ?? '—',
+        level:          raw.brand?.globalLevel     ?? raw.brand?.GlobalLevel    ?? raw.brand?.level ?? 1,
+        tier:           raw.brand?.tier            ?? raw.brand?.Tier           ?? 'bronze',
+        totalXp:        raw.brand?.totalXp         ?? raw.brand?.TotalXp        ?? 0,
+        xpToNextLevel:  raw.brand?.xpToNextLevel   ?? raw.brand?.XpToNextLevel  ?? 1000,
+        currentLevelXp: raw.brand?.currentLevelXp  ?? raw.brand?.CurrentLevelXp ?? 0,
+      },
+      habits: {
+        totalHabits:    raw.habits?.totalHabits   ?? raw.habits?.TotalHabits   ?? 0,
+        completedToday: raw.habits?.completedToday ?? raw.habits?.CompletedToday ?? 0,
+        longestStreak:  raw.habits?.longestStreak  ?? raw.habits?.LongestStreak  ?? 0,
+      },
+      career: {
+        activeGoals:          raw.career?.activeGoals          ?? raw.career?.ActiveGoals          ?? 0,
+        totalMilestones:      raw.career?.completedGoals       ?? raw.career?.CompletedGoals       ?? 0,
+        completedMilestones:  raw.career?.completedGoals       ?? raw.career?.CompletedGoals       ?? 0,
+      },
+      finance: {
+        currentRal:     raw.finance?.currentRal    ?? raw.finance?.CurrentRal    ?? 0,
+        targetRal:      raw.finance?.targetRal     ?? raw.finance?.TargetRal     ?? 0,
+        monthlySavings: raw.finance?.savings       ?? raw.finance?.Savings       ?? 0,
+      },
+      content: {
+        queueSize:           raw.content?.ideasCount         ?? raw.content?.IdeasCount         ?? 0,
+        publishedThisMonth:  raw.content?.publishedThisMonth ?? raw.content?.PublishedThisMonth ?? 0,
+        readyToPublish:      raw.content?.readyCount         ?? raw.content?.ReadyCount         ?? 0,
+      },
+    };
   } catch {
     return null;
   }

@@ -30,7 +30,7 @@ public static class DashboardEndpoints
 
                 var totalHabits    = await db.Habits.CountAsync(h => h.Active);
                 var completedToday = await db.HabitLogs.CountAsync(l => l.LoggedDate == today && l.Completed);
-                var longestStreak  = await db.Habits.MaxAsync(h => (int?)h.StreakBest) ?? 0;
+                var longestStreak  = await db.Habits.AnyAsync() ? (await db.Habits.MaxAsync(h => (int?)h.StreakBest) ?? 0) : 0;
 
                 var ideasCount = await db.ContentQueue.CountAsync(c => c.Status == "idea");
                 var readyCount = await db.ContentQueue.CountAsync(c => c.Status == "ready");
