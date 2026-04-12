@@ -78,11 +78,18 @@ export function ClaudeChat() {
 
   async function triggerWeeklyReview() {
     setWeeklyLoading(true);
+    setMessages(prev => [...prev, { role: 'user', content: '📊 Genera la mia weekly review' }]);
     try {
-      await fetch('/api/proxy/claude/weekly-review', { method: 'POST' });
-      setMessages(prev => [...prev, { role: 'assistant', content: '✅ Weekly review generata e salvata nel Journal!' }]);
-    } catch { /* ignore */ }
-    finally { setWeeklyLoading(false); }
+      const res = await fetch('/api/proxy/claude/weekly-review', { method: 'POST' });
+      if (!res.ok) throw new Error(`${res.status}`);
+      const data = await res.json();
+      const text = data.review ?? data.Review ?? '(nessun contenuto)';
+      setMessages(prev => [...prev, { role: 'assistant', content: `📅 **Weekly Review**\n\n${text}\n\n✅ Salvata nel Journal.` }]);
+    } catch (e) {
+      setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Errore nella generazione della weekly review. Riprova.' }]);
+    } finally {
+      setWeeklyLoading(false);
+    }
   }
 
   return (

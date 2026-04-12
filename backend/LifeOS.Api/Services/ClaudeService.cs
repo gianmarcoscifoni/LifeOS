@@ -56,7 +56,22 @@ public class ClaudeService(
     public async Task<string> GenerateWeeklyReview()
     {
         var summary = await BuildWeeklySummary();
-        return await Ask($"Genera la mia review settimanale basata su questi dati: {summary}");
+        var review = await Ask($"Genera la mia review settimanale basata su questi dati: {summary}");
+
+        // Persist as journal entry
+        db.JournalEntries.Add(new JournalEntry
+        {
+            Id        = Guid.NewGuid(),
+            EntryDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            Content   = review,
+            Mood      = "neutral",
+            Tags      = ["weekly_review", "ai_generated"],
+            Source    = "weekly_review",
+            CreatedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        return review;
     }
 
     public async Task<TranscriptAnalysisDto> AnalyzeTranscript(string transcript)
