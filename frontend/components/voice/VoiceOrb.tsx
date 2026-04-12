@@ -286,11 +286,14 @@ export function VoiceOrb() {
           if (line.startsWith('data: ')) {
             const data = line.slice(6).trim();
             if (data === '[DONE]') continue;
+            let delta = '';
             try {
               const parsed = JSON.parse(data);
-              const delta = parsed?.delta?.text ?? parsed?.text ?? '';
-              if (delta) fullReply += delta;
-            } catch { /* chunk */ }
+              delta = parsed?.delta?.text ?? parsed?.text ?? '';
+            } catch {
+              delta = data; // plain text chunk
+            }
+            if (delta) fullReply += delta;
           }
         }
       }
