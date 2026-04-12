@@ -1,10 +1,13 @@
 'use client';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, Volume2, X } from 'lucide-react';
-import type { TranscriptAnalysisDto } from '@/lib/api';
+import type { TranscriptAnalysisDto, CommitResultDto } from '@/lib/api';
 import { saveVoiceSession, updateAreaStreaks } from '@/lib/voiceSession';
+import { saveDailyGoal } from '@/lib/goalSession';
+import { useXpFloaterStore } from '@/lib/store';
 import { TranscriptReveal } from './TranscriptReveal';
+import { LevelUpBanner } from './LevelUpBanner';
 
 type VoiceState = 'idle' | 'listening' | 'thinking' | 'speaking';
 
@@ -49,6 +52,11 @@ interface Message { role: 'user' | 'assistant'; content: string }
 
 const WAVEFORM_BARS = 24;
 
+const AREA_COLOR: Record<string, string> = {
+  career: '#9333EA', habits: '#86EFAC', finance: '#C9A84C',
+  health: '#F0C96E', brand: '#C084FC', relationships: '#67E8F9',
+};
+
 export function VoiceOrb() {
   const [state, setState] = useState<VoiceState>('idle');
   const [transcript, setTranscript] = useState('');
@@ -59,20 +67,22 @@ export function VoiceOrb() {
   const [analysis, setAnalysis] = useState<TranscriptAnalysisDto | null>(null);
   const [revealTranscript, setRevealTranscript] = useState('');
   const [showReveal, setShowReveal] = useState(false);
+  const [commitResult, setCommitResult] = useState<CommitResultDto | null>(null);
+  const [showLevelUp, setShowLevelUp] = useState(false);
 
-  const recognitionRef    = useRef<SpeechRecognitionInstance | null>(null);
-  const synthRef          = useRef<SpeechSynthesis | null>(null);
-  const animFrameRef      = useRef<number>(0);
-  const analyserRef       = useRef<AnalyserNode | null>(null);
-  const audioCtxRef       = useRef<AudioContext | null>(null);
-  const streamRef         = useRef<MediaStream | null>(null);
-  // Refs to escape stale closures in speech recognition callbacks
-  const transcriptRef     = useRef('');
-  const historyRef        = useRef<Message[]>([]);
-  const handleSendRef     = useRef<(text: string) => void>(() => {});
-  const shouldRestartRef  = useRef(false);
+  const { triggerRewards } = useXpFloaterStore();
 
-  // Keep refs in sync with state
+  const recognitionRef   = useRef<SpeechRecognitionInstance | null>(null);
+  const synthRef         = useRef<SpeechSynthesis | null>(null);
+  const animFrameRef     = useRef<number>(0);
+  const analyserRef      = useRef<AnalyserNode | null>(null);
+  const audioCtxRef      = useRef<AudioContext | null>(null);
+  const streamRef        = useRef<MediaStream | null>(null);
+  const transcriptRef    = useRef('');
+  const historyRef       = useRef<Message[]>([]);
+  const handleSendRef    = useRef<(text: string) => void>(() => {});
+  const shouldRestartRef = useRef(false);
+
   useEffect(() => { transcriptRef.current = transcript; }, [transcript]);
   useEffect(() => { historyRef.current = messages; }, [messages]);
 
@@ -95,7 +105,6 @@ export function VoiceOrb() {
       }
       if (final) {
         const text = final.trim();
-        // Reset interim display and fire backend call
         setTranscript('');
         transcriptRef.current = '';
         handleSendRef.current(text);
@@ -106,7 +115,6 @@ export function VoiceOrb() {
     };
 
     recognition.onend = () => {
-      // With continuous: true, onend fires only on unexpected stop or explicit stop
       if (shouldRestartRef.current) {
         try { recognition.start(); } catch { /* already running */ }
         return;
@@ -122,7 +130,6 @@ export function VoiceOrb() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Global keyboard shortcut: Space to toggle listening
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -207,32 +214,59 @@ export function VoiceOrb() {
     utt.lang = 'it-IT';
     utt.rate = 0.95;
     utt.pitch = 1.0;
-
     const voices = synthRef.current.getVoices();
     const itVoice = voices.find(v => v.lang.startsWith('it')) ?? voices.find(v => v.lang.startsWith('en'));
     if (itVoice) utt.voice = itVoice;
-
     utt.onstart = () => setState('speaking');
     utt.onend   = () => setState('idle');
     synthRef.current.speak(utt);
   }, []);
+
+  const handleCommitResult = useCallback((result: CommitResultDto) => {
+    // Save daily goals to localStorage for career page
+    const today = new Date().toISOString().split('T')[0];
+    result.goals_created.forEach(g => {
+      saveDailyGoal({
+        id: g.id,
+        title: g.title,
+        area: g.area,
+        priority: 'medium',
+        date: today,
+        completedAt: null,
+        sessionId: Date.now().toString(),
+        dbGoalId: g.id,
+      });
+    });
+
+    // Trigger XP floaters
+    const rewards = result.rewards_granted.map((r, i) => ({
+      id: `${Date.now()}-${i}`,
+      icon: r.icon,
+      label: `+${r.xp} XP`,
+      color: AREA_COLOR[r.area] ?? '#9333EA',
+      x: 20 + Math.random() * 60,
+    }));
+    if (rewards.length > 0) triggerRewards(rewards);
+
+    // Level up banner
+    if (result.leveled_up) {
+      setCommitResult(result);
+      setShowLevelUp(true);
+    }
+  }, [triggerRewards]);
 
   const handleSend = useCallback(async (text: string) => {
     setState('thinking');
     setMessages(prev => [...prev, { role: 'user', content: text }]);
     setTranscript('');
 
-    // Snapshot of prior turns (before current user message)
     const historySnapshot = historyRef.current;
 
     try {
       const res = await fetch('/api/proxy/claude/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text,
-          history: historySnapshot,
-        }),
+        body: JSON.stringify({ message: text, history: historySnapshot }),
       });
 
       if (!res.ok || !res.body) throw new Error();
@@ -265,7 +299,7 @@ export function VoiceOrb() {
       setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
       speak(reply);
 
-      // Fire-and-forget transcript analysis (only for substantial utterances)
+      // Fire-and-forget transcript analysis
       if (text.length > 20) {
         fetch('/api/proxy/claude/analyze', {
           method: 'POST',
@@ -289,7 +323,6 @@ export function VoiceOrb() {
           })
           .catch(() => {});
       }
-
     } catch {
       const err = 'Errore di connessione al backend.';
       setMessages(prev => [...prev, { role: 'assistant', content: err }]);
@@ -297,15 +330,11 @@ export function VoiceOrb() {
     }
   }, [speak]);
 
-  // Keep handleSendRef in sync so recognition.onresult can always call the latest version
   useEffect(() => { handleSendRef.current = handleSend; }, [handleSend]);
 
-  const stateColor = {
-    idle: '#9333EA',
-    listening: '#C9A84C',
-    thinking: '#C084FC',
-    speaking: '#86EFAC',
-  }[state];
+  const stateColor = useMemo(() => ({
+    idle: '#9333EA', listening: '#C9A84C', thinking: '#C084FC', speaking: '#86EFAC',
+  }[state]), [state]);
 
   const stateLabel = {
     idle: 'Hold SPACE or tap',
@@ -320,7 +349,7 @@ export function VoiceOrb() {
     <>
       {/* Floating trigger button */}
       <motion.button
-        onClick={() => { setOpen(true); }}
+        onClick={() => setOpen(true)}
         className="fixed bottom-20 right-5 lg:bottom-6 lg:right-6 z-40 w-14 h-14 rounded-full flex items-center justify-center"
         style={{
           background: 'linear-gradient(135deg, #3B0D7A, #9333EA)',
@@ -386,7 +415,6 @@ export function VoiceOrb() {
               {/* Orb */}
               <div className="flex flex-col items-center py-8 gap-4">
                 <div className="relative">
-                  {/* Outer pulse rings */}
                   {state !== 'idle' && [1, 2, 3].map(i => (
                     <motion.div
                       key={i}
@@ -396,8 +424,6 @@ export function VoiceOrb() {
                       transition={{ duration: 1.8, delay: i * 0.4, repeat: Infinity, ease: 'easeOut' }}
                     />
                   ))}
-
-                  {/* Main orb button */}
                   <motion.button
                     onClick={state === 'idle' ? startListening : (state === 'listening' ? stopListening : undefined)}
                     className="relative w-28 h-28 rounded-full flex items-center justify-center"
@@ -418,12 +444,10 @@ export function VoiceOrb() {
                   </motion.button>
                 </div>
 
-                {/* State label */}
                 <p className="text-xs font-inter font-semibold tracking-widest uppercase" style={{ color: stateColor }}>
                   {stateLabel}
                 </p>
 
-                {/* Waveform — live bars when listening/speaking */}
                 <div className="flex items-center gap-[2px] h-14">
                   {bars.map((h, i) => (
                     <motion.div
@@ -443,7 +467,6 @@ export function VoiceOrb() {
                   ))}
                 </div>
 
-                {/* Live transcript (interim) */}
                 {transcript && (
                   <motion.p
                     initial={{ opacity: 0 }}
@@ -496,6 +519,19 @@ export function VoiceOrb() {
             transcript={revealTranscript}
             analysis={analysis}
             onClose={() => setShowReveal(false)}
+            onCommit={handleCommitResult}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Level up banner */}
+      <AnimatePresence>
+        {showLevelUp && commitResult && (
+          <LevelUpBanner
+            level={commitResult.new_level}
+            tier={commitResult.new_tier}
+            title={commitResult.new_title}
+            onDismiss={() => setShowLevelUp(false)}
           />
         )}
       </AnimatePresence>

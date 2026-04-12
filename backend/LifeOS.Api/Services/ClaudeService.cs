@@ -1,13 +1,17 @@
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using LifeOS.Api.Data;
 using LifeOS.Api.DTOs;
+using LifeOS.Api.Models;
 
 namespace LifeOS.Api.Services;
 
-public class ClaudeService(HttpClient http, LifeOsDbContext db, IConfiguration config)
+public class ClaudeService(
+    HttpClient http,
+    LifeOsDbContext db,
+    IConfiguration config,
+    XpCalculatorService xp)
 {
     private const string ApiUrl = "https://api.anthropic.com/v1/messages";
     private const string Model   = "claude-sonnet-4-20250514";
@@ -60,7 +64,7 @@ public class ClaudeService(HttpClient http, LifeOsDbContext db, IConfiguration c
         var body = new
         {
             model = Model,
-            max_tokens = 1000,
+            max_tokens = 1200,
             stream = false,
             system = "Sei un analizzatore di testo. Rispondi SOLO con JSON valido, nessun testo extra, nessun markdown.",
             messages = new[]
@@ -76,8 +80,17 @@ public class ClaudeService(HttpClient http, LifeOsDbContext db, IConfiguration c
                           "goals": [{"title":"...","area":"career","priority":"high|medium|low","due_hint":"questa settimana|questo mese|null"}],
                           "mood": "great|good|neutral|low|terrible",
                           "gratitude": ["cosa1"],
-                          "coaching_message": "Una frase motivazionale in italiano, max 2 frasi."
+                          "coaching_message": "Una frase motivazionale in italiano, max 2 frasi.",
+                          "expenses": [{"description":"caffè","amount":3.50,"category":"food|transport|entertainment|health|other"}],
+                          "content_ideas": [{"title":"...","platform":"LinkedIn|Instagram|YouTube|GitHub","format":"post|article|reel|carousel|video"}],
+                          "habit_mentions": [{"name":"palestra","completed":true}],
+                          "xp_rewards": [{"action":"Publish LinkedIn post","xp":50,"icon":"💼","area":"brand"}]
                         }
+                        Regole per xp_rewards — usa SOLO queste azioni con questi XP esatti:
+                        "Publish LinkedIn post"=50, "Publish LinkedIn article"=150, "Publish Medium article"=200,
+                        "Instagram carousel"=75, "Instagram reel"=100, "GitHub open source commit"=30,
+                        "Conference talk"=500, "Land a client"=1000, "Certification earned"=750,
+                        "Networking event attended"=100, "1-on-1 coffee with contact"=50, "30-day habit streak"=200.
                         Trascrizione: {{transcript}}
                         """,
                 },
@@ -92,7 +105,6 @@ public class ClaudeService(HttpClient http, LifeOsDbContext db, IConfiguration c
             .GetProperty("text")
             .GetString() ?? "{}";
 
-        // Strip markdown code fences if Claude adds them
         var cleaned = raw.Trim();
         if (cleaned.StartsWith("```"))
         {
@@ -100,10 +112,173 @@ public class ClaudeService(HttpClient http, LifeOsDbContext db, IConfiguration c
             cleaned = cleaned[..cleaned.LastIndexOf("```")].Trim();
         }
 
-        return JsonSerializer.Deserialize<TranscriptAnalysisDto>(
-            cleaned,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+        var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        return JsonSerializer.Deserialize<TranscriptAnalysisDto>(cleaned, opts)
             ?? throw new InvalidOperationException("Failed to parse transcript analysis response.");
+    }
+
+    public async Task<CommitResultDto> CommitTranscript(CommitTranscriptRequest req)
+    {
+        var totalXp = 0;
+        var leveledUp = false;
+        var newLevel = 0;
+        var newTier = string.Empty;
+        var newTitle = string.Empty;
+        var goalsCreated = new List<CreatedGoalDto>();
+        var habitsLogged = new List<LoggedHabitDto>();
+        var contentCreated = 0;
+
+        // --- 1. Resolve domains ---
+        var domains = await db.LifeDomains.ToListAsync();
+        Guid GetDomainId(string area)
+        {
+            var match = domains.FirstOrDefault(d =>
+                d.Name.ToLower().Contains(area.ToLower()) ||
+                area.ToLower().Contains(d.Name.ToLower()));
+            return match?.Id ?? domains.FirstOrDefault()?.Id
+                ?? throw new InvalidOperationException("No life domains found.");
+        }
+
+        // --- 2. Create goals ---
+        foreach (var title in req.GoalTitles)
+        {
+            var area = "career"; // default; frontend can pass area per goal in future
+            var goal = new Goal
+            {
+                Id         = Guid.NewGuid(),
+                DomainId   = GetDomainId(area),
+                Title      = title,
+                Status     = "not_started",
+                CreatedAt  = DateTime.UtcNow,
+                UpdatedAt  = DateTime.UtcNow,
+            };
+            db.Goals.Add(goal);
+            goalsCreated.Add(new CreatedGoalDto(goal.Id, title, area));
+        }
+
+        // --- 3. Journal entry ---
+        var journalSaved = false;
+        if (req.CreateJournalEntry && !string.IsNullOrWhiteSpace(req.Transcript))
+        {
+            db.JournalEntries.Add(new JournalEntry
+            {
+                Id        = Guid.NewGuid(),
+                EntryDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Content   = req.Transcript,
+                Mood      = req.Mood,
+                Tags      = ["voice_checkin"],
+                Source    = "voice",
+                CreatedAt = DateTime.UtcNow,
+            });
+            journalSaved = true;
+        }
+
+        // --- 4. Log habits (fuzzy match) ---
+        var allHabits = await db.Habits.Where(h => h.Active).ToListAsync();
+        foreach (var mention in req.HabitMentions)
+        {
+            var habit = allHabits.FirstOrDefault(h =>
+                h.Name.ToLower().Contains(mention.Name.ToLower()) ||
+                mention.Name.ToLower().Contains(h.Name.ToLower()));
+
+            if (habit == null)
+            {
+                habitsLogged.Add(new LoggedHabitDto(mention.Name, false, false));
+                continue;
+            }
+
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var existing = await db.HabitLogs
+                .FirstOrDefaultAsync(l => l.HabitId == habit.Id && l.LoggedDate == today);
+
+            if (existing == null)
+            {
+                db.HabitLogs.Add(new HabitLog
+                {
+                    Id          = Guid.NewGuid(),
+                    HabitId     = habit.Id,
+                    LoggedDate  = today,
+                    Completed   = mention.Completed,
+                });
+            }
+            habitsLogged.Add(new LoggedHabitDto(mention.Name, true, true));
+        }
+
+        // --- 5. Create content ideas ---
+        var platforms = await db.Platforms.ToListAsync();
+        foreach (var idea in req.ContentIdeas)
+        {
+            var platform = platforms.FirstOrDefault(p =>
+                p.Name.ToLower().Contains(idea.Platform.ToLower()) ||
+                idea.Platform.ToLower().Contains(p.Name.ToLower()));
+            if (platform == null) continue;
+
+            db.ContentQueue.Add(new ContentQueue
+            {
+                Id          = Guid.NewGuid(),
+                PlatformId  = platform.Id,
+                Title       = idea.Title,
+                Format      = idea.Format,
+                Status      = "idea",
+                XpOnPublish = 50,
+                CreatedAt   = DateTime.UtcNow,
+                UpdatedAt   = DateTime.UtcNow,
+            });
+            contentCreated++;
+        }
+
+        await db.SaveChangesAsync();
+
+        // --- 6. Grant XP rewards (after SaveChanges) ---
+        var rewardsGranted = new List<XpRewardDto>();
+        foreach (var reward in req.XpRewards)
+        {
+            try
+            {
+                var result = await xp.LogXp(new XpLogRequest(reward.Action, reward.Xp, reward.Area));
+                totalXp += reward.Xp;
+                if (result.LeveledUp)
+                {
+                    leveledUp = true;
+                    newLevel  = result.GlobalLevel;
+                    newTier   = result.Tier;
+                    newTitle  = result.Title;
+                }
+                rewardsGranted.Add(reward);
+            }
+            catch
+            {
+                // Tree not found for this action — skip gracefully
+            }
+        }
+
+        // Always award check-in XP
+        try
+        {
+            var checkin = await xp.LogXp(new XpLogRequest("Weekly review completed", 25, "Content Creation"));
+            totalXp += 25;
+            if (checkin.LeveledUp)
+            {
+                leveledUp = true;
+                newLevel  = checkin.GlobalLevel;
+                newTier   = checkin.Tier;
+                newTitle  = checkin.Title;
+            }
+            rewardsGranted.Add(new XpRewardDto("Voice Check-in", 25, "🎙️", "brand"));
+        }
+        catch { /* no Content Creation tree */ }
+
+        return new CommitResultDto(
+            totalXp,
+            leveledUp,
+            newLevel,
+            newTier,
+            newTitle,
+            [.. goalsCreated],
+            [.. habitsLogged],
+            journalSaved,
+            contentCreated,
+            [.. rewardsGranted]);
     }
 
     private object BuildRequestBody(string question, string context, bool stream, List<MessageDto>? history = null)
@@ -192,7 +367,7 @@ public class ClaudeService(HttpClient http, LifeOsDbContext db, IConfiguration c
                 trees = profile.SkillTrees.Select(t => new { t.Name, t.TreeLevel, t.TreeXp }),
             },
             activeGoals = activeGoals.Select(g => new { g.Title, g.Status, g.ProgressPct }),
-            habits = habits,
+            habits,
             finance = finance == null ? null : new
             {
                 finance.CurrentRal,

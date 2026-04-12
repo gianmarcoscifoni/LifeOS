@@ -62,5 +62,21 @@ public static class ClaudeEndpoints
                 return Results.Ok(analysis);
             })
             .WithName("AnalyzeTranscript");
+
+        /// <summary>
+        /// Committa la trascrizione nel DB: crea goals, journal entry, logga habit, idee content e XP.
+        /// </summary>
+        group.MapPost("/commit",
+            [ProducesResponseType<CommitResultDto>(200)]
+            [ProducesResponseType(400)]
+            async (CommitTranscriptRequest req, ClaudeService claude) =>
+            {
+                if (string.IsNullOrWhiteSpace(req.Transcript))
+                    return Results.BadRequest("Transcript vuoto.");
+
+                var result = await claude.CommitTranscript(req);
+                return Results.Ok(result);
+            })
+            .WithName("CommitTranscript");
     }
 }

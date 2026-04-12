@@ -132,3 +132,27 @@ export const useUiStore = create<UiStore>((set) => ({
   startLoading: () => set((s) => ({ loadingCount: s.loadingCount + 1 })),
   stopLoading: () => set((s) => ({ loadingCount: Math.max(0, s.loadingCount - 1) })),
 }));
+
+// ── XP Floater store ───────────────────────────────────────────────────────
+
+export interface FloatReward {
+  id: string;
+  icon: string;
+  label: string;
+  color: string;
+  x: number; // percentage (0-100) horizontal position
+}
+
+interface XpFloaterStore {
+  rewards: FloatReward[];
+  triggerRewards: (rewards: FloatReward[]) => void;
+  removeReward: (id: string) => void;
+}
+
+export const useXpFloaterStore = create<XpFloaterStore>((set) => ({
+  rewards: [],
+  triggerRewards: (newRewards) =>
+    set((s) => ({ rewards: [...s.rewards, ...newRewards] })),
+  removeReward: (id) =>
+    set((s) => ({ rewards: s.rewards.filter((r) => r.id !== id) })),
+}));

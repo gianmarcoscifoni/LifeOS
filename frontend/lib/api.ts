@@ -13,6 +13,30 @@ export interface GoalSuggestionDto {
   due_hint: string | null;
 }
 
+export interface ExpenseMentionDto {
+  description: string;
+  amount: number | null;
+  category: string;
+}
+
+export interface ContentIdeaDto {
+  title: string;
+  platform: string;
+  format: string | null;
+}
+
+export interface HabitMentionDto {
+  name: string;
+  completed: boolean;
+}
+
+export interface XpRewardDto {
+  action: string;
+  xp: number;
+  icon: string;
+  area: string;
+}
+
 export interface TranscriptAnalysisDto {
   keywords: string[];
   topics: TopicDto[];
@@ -20,6 +44,24 @@ export interface TranscriptAnalysisDto {
   mood: string;
   gratitude: string[];
   coaching_message: string;
+  expenses: ExpenseMentionDto[];
+  content_ideas: ContentIdeaDto[];
+  habit_mentions: HabitMentionDto[];
+  xp_rewards: XpRewardDto[];
+}
+
+// Commit result (mirrors backend CommitResultDto)
+export interface CommitResultDto {
+  total_xp_earned: number;
+  leveled_up: boolean;
+  new_level: number;
+  new_tier: string;
+  new_title: string;
+  goals_created: { id: string; title: string; area: string }[];
+  habits_logged: { name: string; found: boolean; logged: boolean }[];
+  journal_saved: boolean;
+  content_ideas_created: number;
+  rewards_granted: XpRewardDto[];
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
