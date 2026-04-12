@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, Volume2, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { TranscriptAnalysisDto, CommitResultDto } from '@/lib/api';
+import { readSseStream } from '@/lib/sseStream';
 import { saveVoiceSession, updateAreaStreaks } from '@/lib/voiceSession';
 import { saveDailyGoal } from '@/lib/goalSession';
 import { useXpFloaterStore } from '@/lib/store';
@@ -331,31 +332,9 @@ export function VoiceOrb() {
 
       if (!res.ok || !res.body) throw new Error();
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
       let fullReply = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim();
-            if (data === '[DONE]') continue;
-            let delta = '';
-            try {
-              const parsed = JSON.parse(data);
-              delta = parsed?.delta?.text ?? parsed?.text ?? '';
-            } catch {
-              delta = data; // plain text chunk
-            }
-            if (delta) fullReply += delta;
-          }
-        }
+      for await (const delta of readSseStream(res.body)) {
+        fullReply += delta;
       }
 
       const reply = fullReply || 'Scusa, non ho ricevuto risposta dal backend.';

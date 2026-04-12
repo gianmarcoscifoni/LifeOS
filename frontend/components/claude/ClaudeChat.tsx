@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, RefreshCw, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { readSseStream } from '@/lib/sseStream';
 
 interface Message { role: 'user' | 'assistant'; content: string }
 
@@ -106,46 +107,21 @@ export function ClaudeChat() {
       });
       if (!res.ok || !res.body) throw new Error('Stream error');
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
       let started = false;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') continue;
-
-          let delta = '';
-          try {
-            const parsed = JSON.parse(data);
-            delta = parsed?.delta?.text ?? parsed?.text ?? '';
-          } catch {
-            delta = data;
-          }
-
-          if (delta) {
-            if (!started) {
-              setShowTyping(false);
-              started = true;
-              setMessages(prev => [...prev, { role: 'assistant', content: delta }]);
-            } else {
-              setMessages(prev => {
-                const updated = [...prev];
-                const last = updated[updated.length - 1];
-                if (last.role === 'assistant')
-                  updated[updated.length - 1] = { ...last, content: last.content + delta };
-                return updated;
-              });
-            }
-          }
+      for await (const delta of readSseStream(res.body)) {
+        if (!started) {
+          setShowTyping(false);
+          started = true;
+          setMessages(prev => [...prev, { role: 'assistant', content: delta }]);
+        } else {
+          setMessages(prev => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last.role === 'assistant')
+              updated[updated.length - 1] = { ...last, content: last.content + delta };
+            return updated;
+          });
         }
       }
     } catch {
