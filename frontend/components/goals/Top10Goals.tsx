@@ -64,15 +64,11 @@ function SortableItem({ goal, rank, onUpdateProgress, onDelete }: SortableItemPr
         transition,
         zIndex: isDragging ? 50 : undefined,
         opacity: isDragging ? 0.7 : 1,
-      }}
-      className="flex items-center gap-3 px-3 py-3 rounded-xl"
-      {...{ style: {
-        transform: CSS.Transform.toString(transform),
-        transition,
         background: isDragging ? `${color}14` : `${color}08`,
         border: `1px solid ${isDragging ? color + '40' : color + '18'}`,
         boxShadow: isDragging ? `0 8px 24px rgba(0,0,0,0.4)` : undefined,
-      }}}
+      }}
+      className="flex items-center gap-3 px-3 py-3 rounded-xl"
     >
       {/* Rank */}
       <span
