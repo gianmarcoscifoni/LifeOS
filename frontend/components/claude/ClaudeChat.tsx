@@ -47,19 +47,22 @@ export function ClaudeChat() {
           if (line.startsWith('data: ')) {
             const data = line.slice(6).trim();
             if (data === '[DONE]') continue;
+            let delta = '';
             try {
               const parsed = JSON.parse(data);
-              const delta = parsed?.delta?.text ?? parsed?.text ?? '';
-              if (delta) {
-                setMessages(prev => {
-                  const updated = [...prev];
-                  const last = updated[updated.length - 1];
-                  if (last.role === 'assistant')
-                    updated[updated.length - 1] = { ...last, content: last.content + delta };
-                  return updated;
-                });
-              }
-            } catch { /* chunk */ }
+              delta = parsed?.delta?.text ?? parsed?.text ?? '';
+            } catch {
+              delta = data; // plain text chunk from backend
+            }
+            if (delta) {
+              setMessages(prev => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last.role === 'assistant')
+                  updated[updated.length - 1] = { ...last, content: last.content + delta };
+                return updated;
+              });
+            }
           }
         }
       }
