@@ -14,7 +14,7 @@ public class ClaudeService(
     XpCalculatorService xp)
 {
     private const string ApiUrl = "https://api.anthropic.com/v1/messages";
-    private const string Model   = "claude-sonnet-4-20250514";
+    private const string Model   = "claude-sonnet-4-6";
 
     public async Task<string> Ask(string question, List<MessageDto>? history = null)
     {
@@ -321,7 +321,11 @@ public class ClaudeService(
         request.Headers.Add("anthropic-version", "2023-06-01");
 
         var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException($"Claude API {(int)response.StatusCode}: {err}");
+        }
         return response;
     }
 

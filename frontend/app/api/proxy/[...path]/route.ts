@@ -36,6 +36,8 @@ async function handler(req: NextRequest, { params }: { params: Promise<{ path: s
   });
 }
 
+export const maxDuration = 60;
+
 export const GET    = handler;
 export const POST   = handler;
 export const PATCH  = handler;
