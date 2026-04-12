@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, Volume2, X } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import type { TranscriptAnalysisDto, CommitResultDto } from '@/lib/api';
 import { saveVoiceSession, updateAreaStreaks } from '@/lib/voiceSession';
 import { saveDailyGoal } from '@/lib/goalSession';
@@ -49,6 +50,65 @@ declare global {
 }
 
 interface Message { role: 'user' | 'assistant'; content: string }
+
+// Strip markdown for TTS so it doesn't read asterisks/hashes
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/#{1,6}\s+/g, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/`{1,3}[^`]*`{1,3}/g, '')
+    .replace(/\[(.+?)\]\(.+?\)/g, '$1')
+    .replace(/^[-*+]\s+/gm, '')
+    .replace(/^\d+\.\s+/gm, '')
+    .replace(/^>\s+/gm, '')
+    .replace(/---+/g, '')
+    .trim();
+}
+
+function VoiceMessage({ content }: { content: string }) {
+  return (
+    <ReactMarkdown
+      components={{
+        p: ({ children }) => <p className="mb-1.5 last:mb-0 leading-relaxed">{children}</p>,
+        strong: ({ children }) => (
+          <strong className="font-bold" style={{ color: '#C084FC' }}>{children}</strong>
+        ),
+        em: ({ children }) => (
+          <em style={{ color: 'rgba(226,232,240,0.65)', fontStyle: 'italic' }}>{children}</em>
+        ),
+        ul: ({ children }) => <ul className="mt-1 mb-1.5 space-y-0.5">{children}</ul>,
+        ol: ({ children }) => <ol className="mt-1 mb-1.5 space-y-0.5">{children}</ol>,
+        li: ({ children }) => (
+          <li className="flex items-start gap-1.5 text-xs">
+            <span style={{ color: '#9333EA', marginTop: 1, flexShrink: 0 }}>▸</span>
+            <span>{children}</span>
+          </li>
+        ),
+        h1: ({ children }) => (
+          <p className="font-syne font-black text-sm mb-1 mt-1" style={{ color: '#C084FC' }}>{children}</p>
+        ),
+        h2: ({ children }) => (
+          <p className="font-syne font-bold text-xs mb-1 mt-1 uppercase tracking-wider" style={{ color: 'rgba(192,132,252,0.8)' }}>{children}</p>
+        ),
+        h3: ({ children }) => (
+          <p className="font-bold text-xs mb-0.5 mt-1" style={{ color: 'rgba(192,132,252,0.7)' }}>{children}</p>
+        ),
+        code: ({ children }) => (
+          <code className="px-1 py-0.5 rounded text-[10px] font-mono"
+            style={{ background: 'rgba(147,51,234,0.2)', color: '#C084FC' }}>
+            {children}
+          </code>
+        ),
+        hr: () => (
+          <hr className="my-2" style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.08)' }} />
+        ),
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
+}
 
 const WAVEFORM_BARS = 24;
 
@@ -300,7 +360,7 @@ export function VoiceOrb() {
 
       const reply = fullReply || 'Scusa, non ho ricevuto risposta dal backend.';
       setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
-      speak(reply);
+      speak(stripMarkdown(reply));
 
       // Fire-and-forget transcript analysis
       if (text.length > 20) {
@@ -488,24 +548,34 @@ export function VoiceOrb() {
                   className="mx-4 mb-5 rounded-2xl overflow-hidden"
                   style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}
                 >
-                  <div className="max-h-52 overflow-y-auto p-4 space-y-3">
-                    {messages.slice(-6).map((m, i) => (
-                      <div key={i} className={`flex gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className="max-h-56 overflow-y-auto p-4 space-y-2.5"
+                    style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(147,51,234,0.2) transparent' }}>
+                    {messages.slice(-8).map((m, i) => (
+                      <motion.div
+                        key={i}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                        className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                      >
                         <div
-                          className="max-w-[85%] px-3 py-2 rounded-xl text-xs font-inter leading-relaxed"
+                          className="max-w-[88%] px-3 py-2.5 rounded-xl text-xs font-inter"
                           style={m.role === 'user' ? {
-                            background: 'rgba(147,51,234,0.25)',
+                            background: 'linear-gradient(135deg, rgba(107,33,168,0.5), rgba(59,13,122,0.5))',
                             border: '1px solid rgba(147,51,234,0.3)',
                             color: '#E2E8F0',
                           } : {
-                            background: 'rgba(134,239,172,0.1)',
-                            border: '1px solid rgba(134,239,172,0.2)',
-                            color: '#86EFAC',
+                            background: 'rgba(255,255,255,0.04)',
+                            border: '1px solid rgba(255,255,255,0.07)',
+                            color: '#E2E8F0',
                           }}
                         >
-                          {m.content}
+                          {m.role === 'assistant'
+                            ? <VoiceMessage content={m.content} />
+                            : <p className="leading-relaxed">{m.content}</p>
+                          }
                         </div>
-                      </div>
+                      </motion.div>
                     ))}
                   </div>
                 </div>
