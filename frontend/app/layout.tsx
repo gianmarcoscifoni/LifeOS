@@ -7,6 +7,7 @@ import { BottomNav } from '@/components/shared/BottomNav';
 import { NebulaBackground } from '@/components/shared/NebulaBackground';
 import { VoiceOrb } from '@/components/voice/VoiceOrb';
 import { XpFloater } from '@/components/voice/XpFloater';
+import { VoiceAmbientGlow } from '@/components/voice/VoiceAmbientGlow';
 import { LetMeCook } from '@/components/shared/LetMeCook';
 
 // Syne — ultra-sharp, futuristic headings (Zara / Apple vibes)
@@ -54,6 +55,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </main>
           </div>
           <BottomNav />
+          <VoiceAmbientGlow />
           <VoiceOrb />
           <XpFloater />
           <LetMeCook />

@@ -156,3 +156,100 @@ export const useXpFloaterStore = create<XpFloaterStore>((set) => ({
   removeReward: (id) =>
     set((s) => ({ rewards: s.rewards.filter((r) => r.id !== id) })),
 }));
+
+// ── Voice Assistant store ──────────────────────────────────────────────────
+
+export const DOMAIN_COLORS: Record<string, string> = {
+  career:        '#9333EA',
+  habits:        '#86EFAC',
+  finance:       '#C9A84C',
+  health:        '#F0C96E',
+  brand:         '#C084FC',
+  relationships: '#67E8F9',
+  gratitude:     '#FCD34D',
+  journal:       '#94A3B8',
+  content:       '#67E8F9',
+  general:       '#9333EA',
+};
+
+export type VoicePhase =
+  | 'idle'
+  | 'listening'
+  | 'thinking'
+  | 'speaking'
+  | 'confirming'
+  | 'proactive';
+
+export interface ConfirmItem {
+  label: string;
+  value: string;
+  icon: string;
+  status: 'ok' | 'warn' | 'skip';
+}
+
+export interface DialogueTurn {
+  role: 'system' | 'user' | 'confirmation';
+  text: string;
+  domain?: string;
+  items?: ConfirmItem[];
+}
+
+export interface ActiveDialogueScript {
+  id: string;
+  stepIndex: number;
+  totalSteps: number;
+  currentQuestion: string;
+  domain: string;
+  collectedData: Record<string, unknown>;
+}
+
+export interface ParticleBurst {
+  count: number;
+  color: string;
+}
+
+interface VoiceAssistantStore {
+  isOpen: boolean;
+  phase: VoicePhase;
+  activeDomain: string | null;
+  turns: DialogueTurn[];
+  activeScript: ActiveDialogueScript | null;
+  liveTranscript: string;
+  particleBurst: ParticleBurst | null;
+  pendingNavigation: string | null;
+
+  openVoice: () => void;
+  closeVoice: () => void;
+  setPhase: (phase: VoicePhase) => void;
+  setActiveDomain: (domain: string | null) => void;
+  addTurn: (turn: DialogueTurn) => void;
+  clearTurns: () => void;
+  setLiveTranscript: (t: string) => void;
+  setActiveScript: (script: ActiveDialogueScript | null) => void;
+  triggerParticleBurst: (burst: ParticleBurst) => void;
+  clearParticleBurst: () => void;
+  setPendingNavigation: (path: string | null) => void;
+}
+
+export const useVoiceAssistantStore = create<VoiceAssistantStore>((set) => ({
+  isOpen: false,
+  phase: 'idle',
+  activeDomain: null,
+  turns: [],
+  activeScript: null,
+  liveTranscript: '',
+  particleBurst: null,
+  pendingNavigation: null,
+
+  openVoice: () => set({ isOpen: true }),
+  closeVoice: () => set({ isOpen: false, phase: 'idle', activeDomain: null, liveTranscript: '', activeScript: null, particleBurst: null, pendingNavigation: null }),
+  setPhase: (phase) => set({ phase }),
+  setActiveDomain: (activeDomain) => set({ activeDomain }),
+  addTurn: (turn) => set((s) => ({ turns: [...s.turns, turn] })),
+  clearTurns: () => set({ turns: [] }),
+  setLiveTranscript: (liveTranscript) => set({ liveTranscript }),
+  setActiveScript: (activeScript) => set({ activeScript }),
+  triggerParticleBurst: (particleBurst) => set({ particleBurst }),
+  clearParticleBurst: () => set({ particleBurst: null }),
+  setPendingNavigation: (pendingNavigation) => set({ pendingNavigation }),
+}));
