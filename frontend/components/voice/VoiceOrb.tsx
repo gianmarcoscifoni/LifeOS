@@ -133,16 +133,17 @@ export function VoiceOrb() {
 
   const { triggerRewards } = useXpFloaterStore();
 
-  const recognitionRef   = useRef<SpeechRecognitionInstance | null>(null);
-  const synthRef         = useRef<SpeechSynthesis | null>(null);
-  const animFrameRef     = useRef<number>(0);
-  const analyserRef      = useRef<AnalyserNode | null>(null);
-  const audioCtxRef      = useRef<AudioContext | null>(null);
-  const streamRef        = useRef<MediaStream | null>(null);
-  const transcriptRef    = useRef('');
-  const historyRef       = useRef<Message[]>([]);
-  const handleSendRef    = useRef<(text: string) => void>(() => {});
-  const shouldRestartRef = useRef(false);
+  const recognitionRef      = useRef<SpeechRecognitionInstance | null>(null);
+  const synthRef            = useRef<SpeechSynthesis | null>(null);
+  const animFrameRef        = useRef<number>(0);
+  const analyserRef         = useRef<AnalyserNode | null>(null);
+  const audioCtxRef         = useRef<AudioContext | null>(null);
+  const streamRef           = useRef<MediaStream | null>(null);
+  const transcriptRef       = useRef('');
+  const accumulatedRef      = useRef(''); // finalized sentences during session
+  const historyRef          = useRef<Message[]>([]);
+  const handleSendRef       = useRef<(text: string) => void>(() => {});
+  const shouldRestartRef    = useRef(false);
 
   useEffect(() => { transcriptRef.current = transcript; }, [transcript]);
   useEffect(() => { historyRef.current = messages; }, [messages]);
@@ -158,21 +159,17 @@ export function VoiceOrb() {
 
     recognition.onresult = (e: SpeechRecognitionEvent) => {
       let interim = '';
-      let final = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const r = e.results[i];
-        if (r.isFinal) final += r[0].transcript;
-        else interim += r[0].transcript;
+        if (r.isFinal) {
+          accumulatedRef.current += (accumulatedRef.current ? ' ' : '') + r[0].transcript.trim();
+        } else {
+          interim += r[0].transcript;
+        }
       }
-      if (final) {
-        const text = final.trim();
-        setTranscript('');
-        transcriptRef.current = '';
-        handleSendRef.current(text);
-      } else {
-        setTranscript(interim);
-        transcriptRef.current = interim;
-      }
+      const live = accumulatedRef.current + (interim ? (accumulatedRef.current ? ' ' : '') + interim : '');
+      setTranscript(live);
+      transcriptRef.current = live;
     };
 
     recognition.onend = () => {
@@ -181,9 +178,15 @@ export function VoiceOrb() {
         return;
       }
       stopAudioAnalysis();
-      setState('idle');
-      setTranscript('');
-      transcriptRef.current = '';
+      const full = accumulatedRef.current.trim();
+      accumulatedRef.current = '';
+      if (full.length > 0) {
+        handleSendRef.current(full);
+      } else {
+        setState('idle');
+        setTranscript('');
+        transcriptRef.current = '';
+      }
     };
 
     recognitionRef.current = recognition;
@@ -246,6 +249,7 @@ export function VoiceOrb() {
     if (!recognitionRef.current || state !== 'idle') return;
     setTranscript('');
     transcriptRef.current = '';
+    accumulatedRef.current = '';
     shouldRestartRef.current = true;
     setState('listening');
     recognitionRef.current.start();
@@ -263,6 +267,7 @@ export function VoiceOrb() {
     recognitionRef.current?.abort();
     synthRef.current?.cancel();
     stopAudioAnalysis();
+    accumulatedRef.current = '';
     setState('idle');
     setTranscript('');
     transcriptRef.current = '';
@@ -320,10 +325,36 @@ export function VoiceOrb() {
     setState('thinking');
     setMessages(prev => [...prev, { role: 'user', content: text }]);
     setTranscript('');
+    transcriptRef.current = '';
 
     const historySnapshot = historyRef.current;
 
     try {
+      // Analyze the full transcript
+      if (text.length > 20) {
+        const analysisRes = await fetch('/api/proxy/claude/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transcript: text }),
+        });
+        if (analysisRes.ok) {
+          const a: TranscriptAnalysisDto = await analysisRes.json();
+          setAnalysis(a);
+          setRevealTranscript(text);
+          saveVoiceSession({
+            id: Date.now().toString(),
+            date: new Date().toISOString().split('T')[0],
+            timestamp: new Date().toISOString(),
+            transcript: text,
+            analysis: a,
+            coachingMessage: a.coaching_message,
+          });
+          updateAreaStreaks(a);
+          setShowReveal(true);
+        }
+      }
+
+      // Get Claude's coaching reply
       const res = await fetch('/api/proxy/claude/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -340,35 +371,11 @@ export function VoiceOrb() {
       const reply = fullReply || 'Scusa, non ho ricevuto risposta dal backend.';
       setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
       speak(stripMarkdown(reply));
-
-      // Fire-and-forget transcript analysis
-      if (text.length > 20) {
-        fetch('/api/proxy/claude/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ transcript: text }),
-        })
-          .then(r => r.json())
-          .then((a: TranscriptAnalysisDto) => {
-            setAnalysis(a);
-            setRevealTranscript(text);
-            setShowReveal(true);
-            saveVoiceSession({
-              id: Date.now().toString(),
-              date: new Date().toISOString().split('T')[0],
-              timestamp: new Date().toISOString(),
-              transcript: text,
-              analysis: a,
-              coachingMessage: a.coaching_message,
-            });
-            updateAreaStreaks(a);
-          })
-          .catch(() => {});
-      }
     } catch {
       const err = 'Errore di connessione al backend.';
       setMessages(prev => [...prev, { role: 'assistant', content: err }]);
       speak(err);
+      setState('idle');
     }
   }, [speak]);
 
@@ -509,15 +516,36 @@ export function VoiceOrb() {
                   ))}
                 </div>
 
-                {transcript && (
-                  <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="text-sm font-inter text-center px-6 max-w-xs"
-                    style={{ color: 'rgba(226,232,240,0.5)' }}
+                {(state === 'listening' || transcript) && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="w-full px-4"
                   >
-                    {transcript}
-                  </motion.p>
+                    <div
+                      className="w-full rounded-2xl px-4 py-3 min-h-[60px] max-h-40 overflow-y-auto"
+                      style={{
+                        background: 'rgba(201,168,76,0.06)',
+                        border: '1px solid rgba(201,168,76,0.25)',
+                        scrollbarWidth: 'thin',
+                        scrollbarColor: 'rgba(201,168,76,0.2) transparent',
+                      }}
+                    >
+                      {transcript ? (
+                        <p className="text-sm font-inter leading-relaxed" style={{ color: '#E2E8F0' }}>
+                          {transcript}
+                          <span
+                            className="inline-block w-0.5 h-3.5 ml-0.5 align-middle rounded-full"
+                            style={{ background: '#C9A84C', animation: 'pulse 1s ease-in-out infinite' }}
+                          />
+                        </p>
+                      ) : (
+                        <p className="text-xs font-inter" style={{ color: 'rgba(201,168,76,0.35)' }}>
+                          Inizia a parlare…
+                        </p>
+                      )}
+                    </div>
+                  </motion.div>
                 )}
               </div>
 
