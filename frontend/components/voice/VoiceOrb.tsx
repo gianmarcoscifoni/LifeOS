@@ -154,7 +154,7 @@ export function VoiceOrb() {
     if (!SR) { setSupported(false); return; }
 
     const recognition = new SR();
-    recognition.lang = 'it-IT';
+    recognition.lang = navigator.language || 'it-IT';
     recognition.interimResults = true;
     recognition.continuous = true;
 
@@ -175,6 +175,9 @@ export function VoiceOrb() {
 
     (recognition as unknown as { onerror: (e: { error: string }) => void }).onerror = (e: { error: string }) => {
       console.error('[SpeechRecognition] error:', e.error);
+      // no-speech is a normal timeout — recognition restarts via onend, don't kill it
+      if (e.error === 'no-speech') return;
+      // fatal errors only
       setRecogError(e.error);
       shouldRestartRef.current = false;
       stopAudioAnalysis();
