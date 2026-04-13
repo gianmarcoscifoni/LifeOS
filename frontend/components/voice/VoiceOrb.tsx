@@ -125,6 +125,7 @@ export function VoiceOrb() {
   const [bars, setBars] = useState<number[]>(Array(WAVEFORM_BARS).fill(2));
   const [open, setOpen] = useState(false);
   const [supported, setSupported] = useState(true);
+  const [recogError, setRecogError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<TranscriptAnalysisDto | null>(null);
   const [revealTranscript, setRevealTranscript] = useState('');
   const [showReveal, setShowReveal] = useState(false);
@@ -170,6 +171,14 @@ export function VoiceOrb() {
       const live = accumulatedRef.current + (interim ? (accumulatedRef.current ? ' ' : '') + interim : '');
       setTranscript(live);
       transcriptRef.current = live;
+    };
+
+    (recognition as unknown as { onerror: (e: { error: string }) => void }).onerror = (e: { error: string }) => {
+      console.error('[SpeechRecognition] error:', e.error);
+      setRecogError(e.error);
+      shouldRestartRef.current = false;
+      stopAudioAnalysis();
+      setState('idle');
     };
 
     recognition.onend = () => {
@@ -248,6 +257,7 @@ export function VoiceOrb() {
   function startListening() {
     if (!recognitionRef.current || state !== 'idle') return;
     setTranscript('');
+    setRecogError(null);
     transcriptRef.current = '';
     accumulatedRef.current = '';
     shouldRestartRef.current = true;
@@ -515,6 +525,22 @@ export function VoiceOrb() {
                     />
                   ))}
                 </div>
+
+                {recogError && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="w-full px-4"
+                  >
+                    <div className="w-full rounded-xl px-3 py-2 text-xs font-inter text-center"
+                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#FCA5A5' }}>
+                      Errore microfono: <strong>{recogError}</strong>
+                      {recogError === 'not-allowed' && ' — controlla i permessi del browser'}
+                      {recogError === 'network' && ' — richiede connessione (Google STT)'}
+                      {recogError === 'no-speech' && ' — nessun audio rilevato'}
+                    </div>
+                  </motion.div>
+                )}
 
                 {(state === 'listening' || transcript) && (
                   <motion.div
