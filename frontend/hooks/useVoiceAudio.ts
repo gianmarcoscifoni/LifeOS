@@ -40,8 +40,8 @@ declare global {
 }
 
 const WAVEFORM_BARS = 48;
-// After a final result, if silence lasts this long → auto-send
-const AUTO_SEND_PAUSE_MS = 1600;
+/** After a final result, if silence lasts this long → auto-send */
+const AUTO_SEND_PAUSE_MS = 2000;
 
 export interface UseVoiceAudioOptions {
   onTranscriptReady: (text: string) => void;
@@ -58,7 +58,7 @@ export interface UseVoiceAudioReturn {
   stopAll: () => void;
   speak: (text: string, onEnd?: () => void) => void;
   cancelSpeech: () => void;
-  /** True when recognition is active and should-restart is armed */
+  /** True while a recording session is active */
   isListening: boolean;
 }
 
@@ -67,208 +67,196 @@ export function useVoiceAudio({
   onInterim,
   onError,
 }: UseVoiceAudioOptions): UseVoiceAudioReturn {
-  const [bars, setBars]       = useState<number[]>(Array(WAVEFORM_BARS).fill(2));
+  const [bars, setBars]         = useState<number[]>(Array(WAVEFORM_BARS).fill(2));
   const [supported, setSupported] = useState(true);
   const [recogError, setRecogError] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
 
-  const recognitionRef   = useRef<SpeechRecognitionInstance | null>(null);
-  const synthRef         = useRef<SpeechSynthesis | null>(null);
-  const animFrameRef     = useRef<number>(0);
-  const analyserRef      = useRef<AnalyserNode | null>(null);
-  const audioCtxRef      = useRef<AudioContext | null>(null);
-  const streamRef        = useRef<MediaStream | null>(null);
-  const accumulatedRef   = useRef('');
-  const shouldRestartRef = useRef(false);
-  const silenceTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Refs — never trigger re-renders
+  const recogRef    = useRef<SpeechRecognitionInstance | null>(null);
+  const synthRef    = useRef<SpeechSynthesis | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const streamRef   = useRef<MediaStream | null>(null);
+  const animRef     = useRef<number>(0);
 
-  // Stable refs for callbacks
-  const onTranscriptReadyRef = useRef(onTranscriptReady);
-  const onInterimRef         = useRef(onInterim);
-  useEffect(() => { onTranscriptReadyRef.current = onTranscriptReady; }, [onTranscriptReady]);
-  useEffect(() => { onInterimRef.current = onInterim; }, [onInterim]);
+  /** Accumulated final transcript text for the current session */
+  const accRef      = useRef('');
+  /** True while the user intends to keep recording */
+  const activeRef   = useRef(false);
+  /** Timer handle for auto-send after silence */
+  const silenceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
+  // Stable callback refs — updated every render, safe to call from stale closures
+  const onReadyRef   = useRef(onTranscriptReady);
+  const onInterimRef = useRef(onInterim);
+  const onErrorRef   = useRef(onError);
+  useEffect(() => { onReadyRef.current   = onTranscriptReady; }, [onTranscriptReady]);
+  useEffect(() => { onInterimRef.current = onInterim; },        [onInterim]);
+  useEffect(() => { onErrorRef.current   = onError; },          [onError]);
 
-  function clearSilenceTimer() {
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
+  // ── Helper: flush accumulated text and end the session ──────────────────
+
+  function doFlush() {
+    if (silenceRef.current) { clearTimeout(silenceRef.current); silenceRef.current = null; }
+    activeRef.current = false;        // tell onend to send, not restart
+    recogRef.current?.stop();         // → fires onend
   }
 
-  // Called when we want to flush accumulated text as a final send
-  function flushAndSend() {
-    clearSilenceTimer();
-    shouldRestartRef.current = false;
-    setIsListening(false);
-    recognitionRef.current?.stop();
-    // onend will handle the actual send
+  // ── Helper: stop the audio-analysis stream + animation ──────────────────
+
+  function stopAnalysis() {
+    cancelAnimationFrame(animRef.current);
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    audioCtxRef.current?.close().catch(() => {});
+    analyserRef.current = null;
+    streamRef.current   = null;
+    audioCtxRef.current = null;
+    setBars(Array(WAVEFORM_BARS).fill(2));
   }
 
-  // ── Setup SpeechRecognition once ──────────────────────────────────────────
+  // ── Setup SpeechRecognition once on mount ────────────────────────────────
 
   useEffect(() => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SR = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!SR) { setSupported(false); return; }
 
-    const recognition = new SR();
-    // Use browser language but allow it to recognize anything
-    recognition.lang = navigator.language || 'it-IT';
-    recognition.interimResults = true;
-    recognition.continuous = true;
+    const r = new SR();
+    r.lang            = navigator.language || 'it-IT';
+    r.interimResults  = true;
+    r.continuous      = true;
 
-    recognition.onresult = (e: SpeechRecognitionEvent) => {
+    r.onresult = (e: SpeechRecognitionEvent) => {
       let interim = '';
-      let gotFinal = false;
 
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i];
-        if (r.isFinal) {
-          accumulatedRef.current += (accumulatedRef.current ? ' ' : '') + r[0].transcript.trim();
-          gotFinal = true;
+        const res = e.results[i];
+        if (res.isFinal) {
+          accRef.current += (accRef.current ? ' ' : '') + res[0].transcript.trim();
+          // Re-arm silence timer after every final chunk
+          if (silenceRef.current) clearTimeout(silenceRef.current);
+          if (activeRef.current) {
+            silenceRef.current = setTimeout(doFlush, AUTO_SEND_PAUSE_MS);
+          }
         } else {
-          interim += r[0].transcript;
+          interim += res[0].transcript;
         }
       }
 
-      // Show live transcript (accumulated finals + current interim)
-      const live = accumulatedRef.current
-        + (interim ? (accumulatedRef.current ? ' ' : '') + interim : '');
+      // Live display: finals + current interim
+      const live = accRef.current
+        + (interim ? (accRef.current ? ' ' : '') + interim : '');
       onInterimRef.current(live);
-
-      // After each final result, start a silence timer → auto-send
-      if (gotFinal && shouldRestartRef.current) {
-        clearSilenceTimer();
-        silenceTimerRef.current = setTimeout(() => {
-          flushAndSend();
-        }, AUTO_SEND_PAUSE_MS);
-      }
     };
 
-    (recognition as unknown as { onerror: (e: { error: string }) => void }).onerror = (e: { error: string }) => {
-      // no-speech is normal: recognition restarts via onend
-      if (e.error === 'no-speech') return;
-      console.error('[SpeechRecognition]', e.error);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (r as any).onerror = (e: { error: string }) => {
+      if (e.error === 'no-speech') return; // normal Chrome timeout — restart via onend
+      console.warn('[SpeechRecognition] error:', e.error);
       setRecogError(e.error);
-      onError?.(e.error);
-      clearSilenceTimer();
-      shouldRestartRef.current = false;
+      onErrorRef.current?.(e.error);
+      activeRef.current = false;
       setIsListening(false);
-      stopAudioAnalysis();
+      stopAnalysis();
     };
 
-    recognition.onend = () => {
-      // Restart if still in continuous mode
-      if (shouldRestartRef.current) {
-        try { recognition.start(); } catch { /* already starting */ }
+    r.onend = () => {
+      if (activeRef.current) {
+        // Still recording — restart to keep continuous session alive
+        try { r.start(); } catch { /* already starting */ }
         return;
       }
-      // Session ended — flush
-      stopAudioAnalysis();
+      // Session ended intentionally — emit accumulated text
+      stopAnalysis();
       setIsListening(false);
-      const full = accumulatedRef.current.trim();
-      accumulatedRef.current = '';
-      if (full.length > 0) {
-        onTranscriptReadyRef.current(full);
-      }
+      const full = accRef.current.trim();
+      accRef.current = '';
+      if (full.length > 0) onReadyRef.current(full);
     };
 
-    recognitionRef.current = recognition;
+    recogRef.current = r;
     synthRef.current = window.speechSynthesis;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Audio analysis for waveform ───────────────────────────────────────────
+  // ── Audio analysis for waveform bars ─────────────────────────────────────
 
-  async function startAudioAnalysis() {
+  async function startAnalysis() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       const ctx = new AudioContext();
       audioCtxRef.current = ctx;
-      const source = ctx.createMediaStreamSource(stream);
+      const src      = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.75;
-      source.connect(analyser);
+      analyser.smoothingTimeConstant = 0.8;
+      src.connect(analyser);
       analyserRef.current = analyser;
       animateBars();
-    } catch { /* mic denied — recognition still works via browser UI */ }
+    } catch { /* mic blocked — recognition still works via its own stream */ }
   }
 
   function animateBars() {
     if (!analyserRef.current) return;
     const data = new Uint8Array(analyserRef.current.frequencyBinCount);
     analyserRef.current.getByteFrequencyData(data);
-    const newBars = Array.from({ length: WAVEFORM_BARS }, (_, i) => {
+    setBars(Array.from({ length: WAVEFORM_BARS }, (_, i) => {
       const val = data[Math.floor((i / WAVEFORM_BARS) * data.length)] ?? 0;
       return Math.max(2, (val / 255) * 60);
-    });
-    setBars(newBars);
-    animFrameRef.current = requestAnimationFrame(animateBars);
+    }));
+    animRef.current = requestAnimationFrame(animateBars);
   }
 
-  function stopAudioAnalysis() {
-    cancelAnimationFrame(animFrameRef.current);
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    audioCtxRef.current?.close().catch(() => {});
-    analyserRef.current = null;
-    streamRef.current = null;
-    setBars(Array(WAVEFORM_BARS).fill(2));
-  }
-
-  // ── Public controls ───────────────────────────────────────────────────────
+  // ── Public API ────────────────────────────────────────────────────────────
 
   const startListening = useCallback(() => {
-    if (!recognitionRef.current) return;
-    clearSilenceTimer();
+    if (!recogRef.current) return;
+    if (silenceRef.current) { clearTimeout(silenceRef.current); silenceRef.current = null; }
+    accRef.current    = '';
+    activeRef.current = true;
     setRecogError(null);
-    accumulatedRef.current = '';
-    shouldRestartRef.current = true;
     setIsListening(true);
-    try {
-      recognitionRef.current.start();
-    } catch { /* might already be running */ }
-    startAudioAnalysis();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    try { recogRef.current.start(); } catch { /* already running */ }
+    startAnalysis();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Manual stop — flush immediately
+  /** Manual stop — sends whatever was accumulated */
   const stopListening = useCallback(() => {
-    flushAndSend();
-    stopAudioAnalysis();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    doFlush();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** Hard cancel — nothing is sent */
   const stopAll = useCallback(() => {
-    clearSilenceTimer();
-    shouldRestartRef.current = false;
+    if (silenceRef.current) { clearTimeout(silenceRef.current); silenceRef.current = null; }
+    activeRef.current = false;
+    accRef.current    = '';
     setIsListening(false);
-    recognitionRef.current?.abort();
+    recogRef.current?.abort();
     synthRef.current?.cancel();
-    stopAudioAnalysis();
-    accumulatedRef.current = '';
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    stopAnalysis();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const speak = useCallback((text: string, onEnd?: () => void) => {
     if (!synthRef.current) return;
     synthRef.current.cancel();
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.lang = 'it-IT';
-    utt.rate = 0.95;
-    utt.pitch = 1.0;
+    const utt    = new SpeechSynthesisUtterance(text);
+    utt.lang     = navigator.language || 'it-IT';
+    utt.rate     = 0.95;
+    utt.pitch    = 1.0;
     const voices = synthRef.current.getVoices();
-    const itVoice = voices.find(v => v.lang.startsWith('it')) ?? voices.find(v => v.lang.startsWith('en'));
-    if (itVoice) utt.voice = itVoice;
+    const lang   = navigator.language?.split('-')[0] ?? 'it';
+    const voice  = voices.find(v => v.lang.startsWith(lang))
+                ?? voices.find(v => v.lang.startsWith('en'));
+    if (voice) utt.voice = voice;
     utt.onend = () => onEnd?.();
     synthRef.current.speak(utt);
   }, []);
 
-  const cancelSpeech = useCallback(() => {
-    synthRef.current?.cancel();
-  }, []);
+  const cancelSpeech = useCallback(() => { synthRef.current?.cancel(); }, []);
 
   return {
     bars, supported, recogError, isListening,

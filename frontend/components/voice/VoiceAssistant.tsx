@@ -623,7 +623,7 @@ export function VoiceAssistant() {
 
             {/* Layer 6: Live transcript */}
             <AnimatePresence>
-              {(isListening || phase === 'proactive' || liveTranscript) && (
+              {(isListening || phase === 'proactive' || phase === 'thinking' || liveTranscript) && (
                 <motion.div
                   initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                   className="mt-5 w-full max-w-sm px-4 space-y-2"
@@ -650,20 +650,27 @@ export function VoiceAssistant() {
                     )}
                   </div>
 
-                  {/* Manual send button — appears when there's text */}
-                  {liveTranscript && isListening && (
+                  {/* Send button — always visible while recording */}
+                  {isListening && (
                     <motion.button
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
                       onClick={stopListening}
                       className="w-full py-2.5 rounded-2xl text-sm font-inter font-bold flex items-center justify-center gap-2"
                       style={{
-                        background: 'linear-gradient(135deg, rgba(201,168,76,0.2), rgba(201,168,76,0.1))',
-                        border: '1px solid rgba(201,168,76,0.4)',
-                        color: '#F0C96E',
+                        background: liveTranscript
+                          ? 'linear-gradient(135deg, rgba(201,168,76,0.3), rgba(201,168,76,0.15))'
+                          : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${liveTranscript ? 'rgba(201,168,76,0.6)' : 'rgba(255,255,255,0.12)'}`,
+                        color: liveTranscript ? '#F0C96E' : 'rgba(226,232,240,0.35)',
+                        cursor: liveTranscript ? 'pointer' : 'default',
                       }}
                     >
-                      ↑ Invia ora
+                      <span
+                        className="inline-block w-2 h-2 rounded-full"
+                        style={{ background: '#EF4444', animation: 'pulse 1s ease-in-out infinite' }}
+                      />
+                      {liveTranscript ? '↑ Invia ora' : 'In ascolto…'}
                     </motion.button>
                   )}
                 </motion.div>
