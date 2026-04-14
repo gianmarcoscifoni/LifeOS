@@ -151,6 +151,29 @@ function RadialWaveform({ bars, color, active }: { bars: number[]; color: string
   );
 }
 
+// ── Linear waveform strip ─────────────────────────────────────────────────
+
+function LinearWaveform({ bars, color }: { bars: number[]; color: string }) {
+  // Downsample 48 → 24 bars for the strip
+  const strip = Array.from({ length: 24 }, (_, i) => {
+    const a = bars[i * 2] ?? 2;
+    const b = bars[i * 2 + 1] ?? 2;
+    return Math.max(a, b);
+  });
+  return (
+    <div className="flex items-center justify-center gap-0.5" style={{ height: 40 }}>
+      {strip.map((h, i) => (
+        <motion.div
+          key={i}
+          style={{ width: 3, borderRadius: 2, background: color, minHeight: 3 }}
+          animate={{ height: h }}
+          transition={{ duration: 0.06 }}
+        />
+      ))}
+    </div>
+  );
+}
+
 // ── Confirm item row ───────────────────────────────────────────────────────
 
 function ConfirmRow({ item }: { item: ConfirmItem }) {
@@ -603,10 +626,36 @@ export function VoiceAssistant() {
               </motion.button>
             </div>
 
-            {/* Phase label */}
-            <p className="mt-4 text-xs font-inter font-semibold tracking-widest uppercase" style={{ color: stateColor }}>
-              {PHASE_LABELS[phase]}
-            </p>
+            {/* Linear waveform strip — visible proof that mic is capturing */}
+            <AnimatePresence>
+              {isListening && (
+                <motion.div
+                  initial={{ opacity: 0, scaleY: 0 }}
+                  animate={{ opacity: 1, scaleY: 1 }}
+                  exit={{ opacity: 0, scaleY: 0 }}
+                  className="mt-3"
+                >
+                  <LinearWaveform bars={bars} color={stateColor} />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Dynamic status row */}
+            <div className="mt-2 flex items-center gap-2">
+              {isListening && (
+                <span
+                  className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+                  style={{ background: '#EF4444', animation: 'pulse 0.8s ease-in-out infinite' }}
+                />
+              )}
+              <p className="text-xs font-inter font-semibold tracking-widest uppercase" style={{ color: stateColor }}>
+                {isListening && liveTranscript
+                  ? `Captando · ${liveTranscript.trim().split(/\s+/).length} parole`
+                  : isListening
+                  ? 'Mic attivo — parla ora'
+                  : PHASE_LABELS[phase]}
+              </p>
+            </div>
 
             {/* Error banner */}
             {recogError && (
@@ -643,9 +692,21 @@ export function VoiceAssistant() {
                         <span className="inline-block w-0.5 h-3.5 ml-0.5 align-middle rounded-full"
                           style={{ background: '#C9A84C', animation: 'pulse 1s ease-in-out infinite' }} />
                       </p>
+                    ) : phase === 'thinking' ? (
+                      <p className="text-xs font-inter" style={{ color: 'rgba(192,132,252,0.7)' }}>
+                        Elaborando…
+                      </p>
+                    ) : isListening ? (
+                      <div className="flex items-center gap-2">
+                        <span className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ background: '#EF4444', animation: 'pulse 0.8s ease-in-out infinite' }} />
+                        <p className="text-xs font-inter" style={{ color: 'rgba(201,168,76,0.6)' }}>
+                          Microfono attivo · attendo voce…
+                        </p>
+                      </div>
                     ) : (
-                      <p className="text-xs font-inter" style={{ color: 'rgba(201,168,76,0.4)' }}>
-                        Inizia a parlare… invierò automaticamente dopo la pausa
+                      <p className="text-xs font-inter" style={{ color: 'rgba(226,232,240,0.25)' }}>
+                        Tocca il cerchio o premi SPACE per registrare
                       </p>
                     )}
                   </div>
