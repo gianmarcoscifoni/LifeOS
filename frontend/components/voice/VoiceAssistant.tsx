@@ -187,6 +187,57 @@ function ConfirmRow({ item }: { item: ConfirmItem }) {
   );
 }
 
+// ── Text input fallback bar ───────────────────────────────────────────────
+
+function TextInputBar({ onSend, disabled }: { onSend: (text: string) => void; disabled: boolean }) {
+  const [value, setValue] = useState('');
+
+  function submit() {
+    const text = value.trim();
+    if (!text || disabled) return;
+    setValue('');
+    onSend(text);
+  }
+
+  return (
+    <div
+      className="absolute bottom-5 w-full max-w-sm px-4 flex gap-2 items-center"
+    >
+      <input
+        type="text"
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') submit(); }}
+        placeholder="Scrivi oppure usa il microfono…"
+        disabled={disabled}
+        className="flex-1 rounded-2xl px-4 py-2.5 text-sm font-inter outline-none"
+        style={{
+          background: 'rgba(255,255,255,0.06)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          color: '#E2E8F0',
+          caretColor: '#9333EA',
+        }}
+      />
+      <motion.button
+        onClick={submit}
+        disabled={!value.trim() || disabled}
+        whileHover={{ scale: 1.06 }}
+        whileTap={{ scale: 0.94 }}
+        className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
+        style={{
+          background: value.trim() && !disabled
+            ? 'linear-gradient(135deg, #3B0D7A, #9333EA)'
+            : 'rgba(255,255,255,0.05)',
+          border: '1px solid rgba(147,51,234,0.3)',
+          color: value.trim() && !disabled ? '#fff' : 'rgba(255,255,255,0.2)',
+        }}
+      >
+        ↑
+      </motion.button>
+    </div>
+  );
+}
+
 // ── Message history type ───────────────────────────────────────────────────
 
 interface HistMsg { role: 'user' | 'assistant'; content: string }
@@ -838,12 +889,15 @@ export function VoiceAssistant() {
               )}
             </AnimatePresence>
 
-            {/* Bottom hint */}
+            {/* Text input bar — always works, even when voice doesn't */}
             {!showConfirm && (
-              <p className="absolute bottom-6 text-[10px] font-inter tracking-widest uppercase"
-                style={{ color: 'rgba(226,232,240,0.2)' }}>
-                SPACE · ascolta — ESC · chiudi
-              </p>
+              <TextInputBar
+                onSend={(text) => {
+                  stopAll();
+                  handleSendRef.current(text);
+                }}
+                disabled={phase === 'thinking' || phase === 'speaking'}
+              />
             )}
           </motion.div>
         )}
