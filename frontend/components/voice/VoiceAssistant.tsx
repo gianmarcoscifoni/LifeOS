@@ -893,7 +893,6 @@ export function VoiceAssistant() {
             {!showConfirm && (
               <TextInputBar
                 onSend={(text) => {
-                  stopAll();
                   handleSendRef.current(text);
                 }}
                 disabled={phase === 'thinking' || phase === 'speaking'}

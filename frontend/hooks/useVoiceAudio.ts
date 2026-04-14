@@ -151,7 +151,7 @@ export function useVoiceAudio({
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (r as any).onerror = (e: { error: string }) => {
-      if (e.error === 'no-speech') return; // normal Chrome timeout — restart via onend
+      if (e.error === 'no-speech' || e.error === 'aborted') return; // normal lifecycle
       console.warn('[SpeechRecognition] error:', e.error);
       setRecogError(e.error);
       onErrorRef.current?.(e.error);
