@@ -183,7 +183,20 @@ export function useVoiceAudio({
 
   async function startAnalysis() {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Prefer built-in/internal mic over USB/Bluetooth
+      let deviceId: string | undefined;
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const mics = devices.filter(d => d.kind === 'audioinput');
+        const builtin = mics.find(d =>
+          /built.?in|internal|microfono integrato|macbook|integrated/i.test(d.label)
+        );
+        deviceId = builtin?.deviceId;
+      } catch { /* enumerateDevices not available */ }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+      });
       streamRef.current = stream;
       const ctx = new AudioContext();
       audioCtxRef.current = ctx;
