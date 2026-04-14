@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Mic, Volume2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -54,8 +54,12 @@ function VoiceMsg({ content }: { content: string }) {
 const AMBIENT_COUNT = 22;
 
 function AmbientParticles({ color }: { color: string }) {
-  const particles = useMemo(() =>
-    Array.from({ length: AMBIENT_COUNT }, (_, i) => ({
+  const [particles, setParticles] = useState<Array<{
+    id: number; x: number; y: number; size: number; delay: number; duration: number; drift: number;
+  }>>([]);
+
+  useEffect(() => {
+    setParticles(Array.from({ length: AMBIENT_COUNT }, (_, i) => ({
       id: i,
       x: Math.random() * 100,
       y: Math.random() * 100,
@@ -63,8 +67,8 @@ function AmbientParticles({ color }: { color: string }) {
       delay: Math.random() * 5,
       duration: 4 + Math.random() * 4,
       drift: (Math.random() - 0.5) * 30,
-    }))
-  , []);
+    })));
+  }, []);
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -99,13 +103,13 @@ function AmbientParticles({ color }: { color: string }) {
 // ── Burst particles ────────────────────────────────────────────────────────
 
 function BurstParticles({ color, onDone }: { color: string; onDone: () => void }) {
-  const particles = useMemo(() =>
+  const [particles] = useState(() =>
     Array.from({ length: 40 }, (_, i) => {
       const angle = (i / 40) * Math.PI * 2;
       const dist = 80 + Math.random() * 60;
       return { id: i, x: Math.cos(angle) * dist, y: Math.sin(angle) * dist };
     })
-  , []);
+  );
 
   return (
     <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
