@@ -225,7 +225,7 @@ export function VoiceAssistant() {
 
   // ── Voice audio hook ─────────────────────────────────────────────────
 
-  const { bars, supported, recogError, startListening, stopListening, stopAll, speak } = useVoiceAudio({
+  const { bars, supported, recogError, isListening, startListening, stopListening, stopAll, speak } = useVoiceAudio({
     onInterim: setLiveTranscript,
     onTranscriptReady: useCallback((text: string) => {
       handleSendRef.current(text);
@@ -287,16 +287,16 @@ export function VoiceAssistant() {
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && e.target === document.body) {
+      if (e.code === 'Space') {
         e.preventDefault();
-        if (phase === 'idle') { setPhase('listening'); startListening(); }
-        else if (phase === 'listening') { setPhase('idle'); stopListening(); }
+        if (!isListening) { setPhase('listening'); startListening(); }
+        else { stopListening(); }
       }
       if (e.code === 'Escape') { stopAll(); closeVoice(); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isOpen, phase, setPhase, startListening, stopListening, stopAll, closeVoice]);
+  }, [isOpen, isListening, setPhase, startListening, stopListening, stopAll, closeVoice]);
 
   // ── Commit script ────────────────────────────────────────────────────
 
@@ -343,6 +343,7 @@ export function VoiceAssistant() {
 
   const handleSend = useCallback(async (text: string) => {
     setLiveTranscript('');
+    setPhase('thinking');
     addTurn({ role: 'user', text });
 
     const command = parseVoiceCommand(text);
@@ -436,7 +437,6 @@ export function VoiceAssistant() {
 
     // ── Fallthrough: Claude conversation ─────────────────────────────
 
-    setPhase('thinking');
     const historySnapshot = historyRef.current;
 
     try {
@@ -576,8 +576,8 @@ export function VoiceAssistant() {
               {/* Morphing blob */}
               <motion.button
                 onClick={() => {
-                  if (phase === 'idle') { setPhase('listening'); startListening(); }
-                  else if (phase === 'listening') { setPhase('idle'); stopListening(); }
+                  if (!isListening) { setPhase('listening'); startListening(); }
+                  else { stopListening(); }
                 }}
                 className="relative z-10 flex items-center justify-center"
                 style={{
@@ -623,10 +623,10 @@ export function VoiceAssistant() {
 
             {/* Layer 6: Live transcript */}
             <AnimatePresence>
-              {(phase === 'listening' || phase === 'proactive' || liveTranscript) && (
+              {(isListening || phase === 'proactive' || liveTranscript) && (
                 <motion.div
                   initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                  className="mt-5 w-full max-w-sm px-4"
+                  className="mt-5 w-full max-w-sm px-4 space-y-2"
                 >
                   <div
                     className="w-full rounded-2xl px-4 py-3 min-h-[52px] max-h-32 overflow-y-auto"
@@ -645,10 +645,27 @@ export function VoiceAssistant() {
                       </p>
                     ) : (
                       <p className="text-xs font-inter" style={{ color: 'rgba(201,168,76,0.4)' }}>
-                        Inizia a parlare…
+                        Inizia a parlare… invierò automaticamente dopo la pausa
                       </p>
                     )}
                   </div>
+
+                  {/* Manual send button — appears when there's text */}
+                  {liveTranscript && isListening && (
+                    <motion.button
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      onClick={stopListening}
+                      className="w-full py-2.5 rounded-2xl text-sm font-inter font-bold flex items-center justify-center gap-2"
+                      style={{
+                        background: 'linear-gradient(135deg, rgba(201,168,76,0.2), rgba(201,168,76,0.1))',
+                        border: '1px solid rgba(201,168,76,0.4)',
+                        color: '#F0C96E',
+                      }}
+                    >
+                      ↑ Invia ora
+                    </motion.button>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>

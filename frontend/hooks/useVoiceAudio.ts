@@ -40,6 +40,8 @@ declare global {
 }
 
 const WAVEFORM_BARS = 48;
+// After a final result, if silence lasts this long → auto-send
+const AUTO_SEND_PAUSE_MS = 1600;
 
 export interface UseVoiceAudioOptions {
   onTranscriptReady: (text: string) => void;
@@ -56,6 +58,8 @@ export interface UseVoiceAudioReturn {
   stopAll: () => void;
   speak: (text: string, onEnd?: () => void) => void;
   cancelSpeech: () => void;
+  /** True when recognition is active and should-restart is armed */
+  isListening: boolean;
 }
 
 export function useVoiceAudio({
@@ -63,9 +67,10 @@ export function useVoiceAudio({
   onInterim,
   onError,
 }: UseVoiceAudioOptions): UseVoiceAudioReturn {
-  const [bars, setBars] = useState<number[]>(Array(WAVEFORM_BARS).fill(2));
+  const [bars, setBars]       = useState<number[]>(Array(WAVEFORM_BARS).fill(2));
   const [supported, setSupported] = useState(true);
   const [recogError, setRecogError] = useState<string | null>(null);
+  const [isListening, setIsListening] = useState(false);
 
   const recognitionRef   = useRef<SpeechRecognitionInstance | null>(null);
   const synthRef         = useRef<SpeechSynthesis | null>(null);
@@ -75,52 +80,93 @@ export function useVoiceAudio({
   const streamRef        = useRef<MediaStream | null>(null);
   const accumulatedRef   = useRef('');
   const shouldRestartRef = useRef(false);
+  const silenceTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Stable refs to callbacks so recognition handler is never stale
+  // Stable refs for callbacks
   const onTranscriptReadyRef = useRef(onTranscriptReady);
   const onInterimRef         = useRef(onInterim);
   useEffect(() => { onTranscriptReadyRef.current = onTranscriptReady; }, [onTranscriptReady]);
   useEffect(() => { onInterimRef.current = onInterim; }, [onInterim]);
 
-  // ── Setup SpeechRecognition once ───────────────────────────────────────
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  function clearSilenceTimer() {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  }
+
+  // Called when we want to flush accumulated text as a final send
+  function flushAndSend() {
+    clearSilenceTimer();
+    shouldRestartRef.current = false;
+    setIsListening(false);
+    recognitionRef.current?.stop();
+    // onend will handle the actual send
+  }
+
+  // ── Setup SpeechRecognition once ──────────────────────────────────────────
 
   useEffect(() => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { setSupported(false); return; }
 
     const recognition = new SR();
+    // Use browser language but allow it to recognize anything
     recognition.lang = navigator.language || 'it-IT';
     recognition.interimResults = true;
     recognition.continuous = true;
 
     recognition.onresult = (e: SpeechRecognitionEvent) => {
       let interim = '';
+      let gotFinal = false;
+
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const r = e.results[i];
         if (r.isFinal) {
           accumulatedRef.current += (accumulatedRef.current ? ' ' : '') + r[0].transcript.trim();
+          gotFinal = true;
         } else {
           interim += r[0].transcript;
         }
       }
-      const live = accumulatedRef.current + (interim ? (accumulatedRef.current ? ' ' : '') + interim : '');
+
+      // Show live transcript (accumulated finals + current interim)
+      const live = accumulatedRef.current
+        + (interim ? (accumulatedRef.current ? ' ' : '') + interim : '');
       onInterimRef.current(live);
+
+      // After each final result, start a silence timer → auto-send
+      if (gotFinal && shouldRestartRef.current) {
+        clearSilenceTimer();
+        silenceTimerRef.current = setTimeout(() => {
+          flushAndSend();
+        }, AUTO_SEND_PAUSE_MS);
+      }
     };
 
     (recognition as unknown as { onerror: (e: { error: string }) => void }).onerror = (e: { error: string }) => {
-      if (e.error === 'no-speech') return; // normal timeout, onend will restart
+      // no-speech is normal: recognition restarts via onend
+      if (e.error === 'no-speech') return;
+      console.error('[SpeechRecognition]', e.error);
       setRecogError(e.error);
       onError?.(e.error);
+      clearSilenceTimer();
       shouldRestartRef.current = false;
+      setIsListening(false);
       stopAudioAnalysis();
     };
 
     recognition.onend = () => {
+      // Restart if still in continuous mode
       if (shouldRestartRef.current) {
         try { recognition.start(); } catch { /* already starting */ }
         return;
       }
+      // Session ended — flush
       stopAudioAnalysis();
+      setIsListening(false);
       const full = accumulatedRef.current.trim();
       accumulatedRef.current = '';
       if (full.length > 0) {
@@ -133,7 +179,7 @@ export function useVoiceAudio({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Audio analysis for waveform ────────────────────────────────────────
+  // ── Audio analysis for waveform ───────────────────────────────────────────
 
   async function startAudioAnalysis() {
     try {
@@ -148,7 +194,7 @@ export function useVoiceAudio({
       source.connect(analyser);
       analyserRef.current = analyser;
       animateBars();
-    } catch { /* mic denied */ }
+    } catch { /* mic denied — recognition still works via browser UI */ }
   }
 
   function animateBars() {
@@ -172,27 +218,33 @@ export function useVoiceAudio({
     setBars(Array(WAVEFORM_BARS).fill(2));
   }
 
-  // ── Public controls ────────────────────────────────────────────────────
+  // ── Public controls ───────────────────────────────────────────────────────
 
   const startListening = useCallback(() => {
     if (!recognitionRef.current) return;
+    clearSilenceTimer();
     setRecogError(null);
     accumulatedRef.current = '';
     shouldRestartRef.current = true;
-    recognitionRef.current.start();
+    setIsListening(true);
+    try {
+      recognitionRef.current.start();
+    } catch { /* might already be running */ }
     startAudioAnalysis();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Manual stop — flush immediately
   const stopListening = useCallback(() => {
-    shouldRestartRef.current = false;
-    recognitionRef.current?.stop();
+    flushAndSend();
     stopAudioAnalysis();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const stopAll = useCallback(() => {
+    clearSilenceTimer();
     shouldRestartRef.current = false;
+    setIsListening(false);
     recognitionRef.current?.abort();
     synthRef.current?.cancel();
     stopAudioAnalysis();
@@ -218,5 +270,8 @@ export function useVoiceAudio({
     synthRef.current?.cancel();
   }, []);
 
-  return { bars, supported, recogError, startListening, stopListening, stopAll, speak, cancelSpeech };
+  return {
+    bars, supported, recogError, isListening,
+    startListening, stopListening, stopAll, speak, cancelSpeech,
+  };
 }
