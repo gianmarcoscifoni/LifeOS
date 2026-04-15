@@ -1,7 +1,7 @@
 'use client';
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mic, Volume2 } from 'lucide-react';
+import { X, Mic, Send } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import {
@@ -17,11 +17,9 @@ import {
 import { readSseStream } from '@/lib/sseStream';
 import { saveVoiceSession, updateAreaStreaks } from '@/lib/voiceSession';
 import type { TranscriptAnalysisDto, CommitResultDto } from '@/lib/api';
-import { TranscriptReveal } from './TranscriptReveal';
 import { LevelUpBanner } from './LevelUpBanner';
-import { useState } from 'react';
 
-// ── Strip markdown for TTS ─────────────────────────────────────────────────
+// ── Strip markdown for TTS ────────────────────────────────────────────
 
 function stripMarkdown(text: string): string {
   return text
@@ -31,7 +29,7 @@ function stripMarkdown(text: string): string {
     .replace(/^\d+\.\s+/gm, '').replace(/^>\s+/gm, '').replace(/---+/g, '').trim();
 }
 
-// ── Voice message renderer ─────────────────────────────────────────────────
+// ── Markdown renderer ─────────────────────────────────────────────────
 
 function VoiceMsg({ content }: { content: string }) {
   return (
@@ -39,7 +37,7 @@ function VoiceMsg({ content }: { content: string }) {
       p: ({ children }) => <p className="mb-1 last:mb-0 leading-relaxed">{children}</p>,
       strong: ({ children }) => <strong className="font-bold" style={{ color: '#C084FC' }}>{children}</strong>,
       li: ({ children }) => (
-        <li className="flex items-start gap-1.5 text-xs">
+        <li className="flex items-start gap-1.5">
           <span style={{ color: '#9333EA', marginTop: 1, flexShrink: 0 }}>▸</span>
           <span>{children}</span>
         </li>
@@ -49,9 +47,9 @@ function VoiceMsg({ content }: { content: string }) {
   );
 }
 
-// ── Ambient particles ──────────────────────────────────────────────────────
+// ── Ambient particles ─────────────────────────────────────────────────
 
-const AMBIENT_COUNT = 22;
+const AMBIENT_COUNT = 18;
 
 function AmbientParticles({ color }: { color: string }) {
   const [particles, setParticles] = useState<Array<{
@@ -76,41 +74,25 @@ function AmbientParticles({ color }: { color: string }) {
         <motion.div
           key={p.id}
           className="absolute rounded-full"
-          style={{
-            left: `${p.x}%`,
-            top: `${p.y}%`,
-            width: p.size,
-            height: p.size,
-            background: color,
-          }}
-          animate={{
-            y: [0, -60, 0],
-            x: [0, p.drift, 0],
-            opacity: [0.1, 0.45, 0.1],
-          }}
-          transition={{
-            duration: p.duration,
-            delay: p.delay,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          }}
+          style={{ left: `${p.x}%`, top: `${p.y}%`, width: p.size, height: p.size, background: color }}
+          animate={{ y: [0, p.drift], opacity: [0.08, 0.28, 0.08] }}
+          transition={{ duration: p.duration, delay: p.delay, repeat: Infinity, ease: 'easeInOut' }}
         />
       ))}
     </div>
   );
 }
 
-// ── Burst particles ────────────────────────────────────────────────────────
+// ── Burst particles ───────────────────────────────────────────────────
 
 function BurstParticles({ color, onDone }: { color: string; onDone: () => void }) {
   const [particles] = useState(() =>
     Array.from({ length: 40 }, (_, i) => {
       const angle = (i / 40) * Math.PI * 2;
-      const dist = 80 + Math.random() * 60;
+      const dist  = 80 + Math.random() * 60;
       return { id: i, x: Math.cos(angle) * dist, y: Math.sin(angle) * dist };
     })
   );
-
   return (
     <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
       {particles.map(p => (
@@ -118,8 +100,8 @@ function BurstParticles({ color, onDone }: { color: string; onDone: () => void }
           key={p.id}
           className="absolute w-1.5 h-1.5 rounded-full"
           style={{ background: color }}
-          initial={{ scale: 0, x: 0, y: 0, opacity: 1 }}
-          animate={{ scale: [0, 1.5, 0], x: p.x, y: p.y, opacity: [1, 1, 0] }}
+          initial={{ x: 0, y: 0, scale: 0, opacity: 1 }}
+          animate={{ x: p.x, y: p.y, scale: [0, 1.5, 0], opacity: [1, 1, 0] }}
           transition={{ duration: 0.8, ease: 'easeOut' }}
           onAnimationComplete={p.id === 0 ? onDone : undefined}
         />
@@ -128,7 +110,7 @@ function BurstParticles({ color, onDone }: { color: string; onDone: () => void }
   );
 }
 
-// ── Radial waveform ────────────────────────────────────────────────────────
+// ── Radial waveform ───────────────────────────────────────────────────
 
 function RadialWaveform({ bars, color, active }: { bars: number[]; color: string; active: boolean }) {
   return (
@@ -142,10 +124,10 @@ function RadialWaveform({ bars, color, active }: { bars: number[]; color: string
             bottom: '50%',
             left: '50%',
             transformOrigin: 'bottom center',
-            transform: `translateX(-50%) rotate(${(i / bars.length) * 360}deg) translateY(-56px)`,
+            transform: `translateX(-50%) rotate(${(i / bars.length) * 360}deg) translateY(-52px)`,
             background: color,
             borderRadius: 2,
-            opacity: 0.25 + (h / 60) * 0.75,
+            opacity: 0.2 + (h / 60) * 0.8,
           }}
           animate={{ height: active ? h : 3 }}
           transition={{ duration: 0.04 }}
@@ -155,30 +137,38 @@ function RadialWaveform({ bars, color, active }: { bars: number[]; color: string
   );
 }
 
-// ── Linear waveform strip ─────────────────────────────────────────────────
+// ── Typing dots ───────────────────────────────────────────────────────
 
-function LinearWaveform({ bars, color }: { bars: number[]; color: string }) {
-  // Downsample 48 → 24 bars for the strip
-  const strip = Array.from({ length: 24 }, (_, i) => {
-    const a = bars[i * 2] ?? 2;
-    const b = bars[i * 2 + 1] ?? 2;
-    return Math.max(a, b);
-  });
+function TypingDots({ color }: { color: string }) {
   return (
-    <div className="flex items-center justify-center gap-0.5" style={{ height: 40 }}>
-      {strip.map((h, i) => (
+    <div className="flex items-center gap-1.5 px-1 py-0.5">
+      {[0, 1, 2].map(i => (
         <motion.div
           key={i}
-          style={{ width: 3, borderRadius: 2, background: color, minHeight: 3 }}
-          animate={{ height: h }}
-          transition={{ duration: 0.06 }}
+          className="w-1.5 h-1.5 rounded-full"
+          style={{ background: color }}
+          animate={{ opacity: [0.3, 1, 0.3], y: [0, -3, 0] }}
+          transition={{ duration: 1, delay: i * 0.18, repeat: Infinity }}
         />
       ))}
     </div>
   );
 }
 
-// ── Confirm item row ───────────────────────────────────────────────────────
+// ── Apple-style mic SVG ───────────────────────────────────────────────
+
+function MicSVG({ color, size = 26 }: { color: string; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <rect x="8" y="1" width="8" height="13" rx="4" fill={color} fillOpacity={0.88} />
+      <path d="M5 10v3a7 7 0 0 0 14 0v-3" stroke={color} strokeWidth="1.7" strokeLinecap="round" />
+      <line x1="12" y1="20" x2="12" y2="23" stroke={color} strokeWidth="1.7" strokeLinecap="round" />
+      <line x1="9" y1="23" x2="15" y2="23" stroke={color} strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// ── Confirm item row ──────────────────────────────────────────────────
 
 function ConfirmRow({ item }: { item: ConfirmItem }) {
   const colors = { ok: '#86EFAC', warn: '#FCD34D', skip: 'rgba(226,232,240,0.3)' };
@@ -191,9 +181,17 @@ function ConfirmRow({ item }: { item: ConfirmItem }) {
   );
 }
 
-// ── Text input fallback bar ───────────────────────────────────────────────
+// ── Compact Apple-style input bar ─────────────────────────────────────
 
-function TextInputBar({ onSend, disabled }: { onSend: (text: string) => void; disabled: boolean }) {
+function CompactInputBar({
+  isListening, liveTranscript, disabled, onMicToggle, onSend,
+}: {
+  isListening: boolean;
+  liveTranscript: string;
+  disabled: boolean;
+  onMicToggle: () => void;
+  onSend: (text: string) => void;
+}) {
   const [value, setValue] = useState('');
 
   function submit() {
@@ -205,48 +203,82 @@ function TextInputBar({ onSend, disabled }: { onSend: (text: string) => void; di
 
   return (
     <div
-      className="absolute bottom-5 w-full max-w-sm px-4 flex gap-2 items-center"
+      className="flex items-center gap-2 px-2 py-1.5 rounded-2xl"
+      style={{
+        background: 'rgba(255,255,255,0.06)',
+        border: '1px solid rgba(255,255,255,0.09)',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+      }}
     >
+      {/* Mic toggle */}
+      <motion.button
+        onClick={onMicToggle}
+        disabled={disabled}
+        className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+        style={{
+          background: isListening ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.05)',
+          border: `1px solid ${isListening ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.08)'}`,
+        }}
+        whileHover={{ scale: 1.07 }}
+        whileTap={{ scale: 0.91 }}
+      >
+        {isListening ? (
+          <motion.span
+            className="w-2.5 h-2.5 rounded-sm block"
+            style={{ background: '#EF4444' }}
+            animate={{ opacity: [1, 0.35, 1] }}
+            transition={{ duration: 0.75, repeat: Infinity }}
+          />
+        ) : (
+          <Mic size={15} color="rgba(226,232,240,0.6)" strokeWidth={1.8} />
+        )}
+      </motion.button>
+
+      {/* Text input */}
       <input
         type="text"
         value={value}
         onChange={e => setValue(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter') submit(); }}
-        placeholder="Scrivi oppure usa il microfono…"
+        placeholder={
+          isListening && liveTranscript
+            ? liveTranscript.slice(0, 42) + (liveTranscript.length > 42 ? '…' : '')
+            : isListening
+            ? 'In ascolto…'
+            : 'Scrivi un messaggio…'
+        }
         disabled={disabled}
-        className="flex-1 rounded-2xl px-4 py-2.5 text-sm font-inter outline-none"
-        style={{
-          background: 'rgba(255,255,255,0.06)',
-          border: '1px solid rgba(255,255,255,0.12)',
-          color: '#E2E8F0',
-          caretColor: '#9333EA',
-        }}
+        className="flex-1 bg-transparent outline-none text-sm font-inter py-1.5 min-w-0"
+        style={{ color: '#E2E8F0', caretColor: '#9333EA' }}
       />
-      <motion.button
-        onClick={submit}
-        disabled={!value.trim() || disabled}
-        whileHover={{ scale: 1.06 }}
-        whileTap={{ scale: 0.94 }}
-        className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-        style={{
-          background: value.trim() && !disabled
-            ? 'linear-gradient(135deg, #3B0D7A, #9333EA)'
-            : 'rgba(255,255,255,0.05)',
-          border: '1px solid rgba(147,51,234,0.3)',
-          color: value.trim() && !disabled ? '#fff' : 'rgba(255,255,255,0.2)',
-        }}
-      >
-        ↑
-      </motion.button>
+
+      {/* Send button — only when there is text */}
+      <AnimatePresence>
+        {value.trim() && (
+          <motion.button
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 26 }}
+            onClick={submit}
+            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'linear-gradient(135deg, #3B0D7A, #9333EA)' }}
+            whileTap={{ scale: 0.91 }}
+          >
+            <Send size={14} color="#fff" strokeWidth={2} />
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-// ── Message history type ───────────────────────────────────────────────────
+// ── History type ──────────────────────────────────────────────────────
 
 interface HistMsg { role: 'user' | 'assistant'; content: string }
 
-// ── Phase color map ────────────────────────────────────────────────────────
+// ── Phase maps ────────────────────────────────────────────────────────
 
 const PHASE_COLORS = {
   idle:       '#9333EA',
@@ -258,15 +290,15 @@ const PHASE_COLORS = {
 };
 
 const PHASE_LABELS = {
-  idle:       'Tieni SPACE o tocca',
-  listening:  'In ascolto… rilascia SPACE',
-  thinking:   'Sto elaborando…',
-  speaking:   'Sto parlando…',
+  idle:       'Tocca il cerchio o SPACE',
+  listening:  'In ascolto…',
+  thinking:   'Elaborando…',
+  speaking:   'Risposta…',
   proactive:  'In ascolto…',
-  confirming: 'Confermo?',
+  confirming: 'Conferma?',
 };
 
-// ── Main component ─────────────────────────────────────────────────────────
+// ── Main component ────────────────────────────────────────────────────
 
 export function VoiceAssistant() {
   const router = useRouter();
@@ -277,22 +309,25 @@ export function VoiceAssistant() {
     setPendingNavigation,
   } = useVoiceAssistantStore();
 
-  const { habits }      = useHabitStore();
+  const { habits }         = useHabitStore();
   const { triggerRewards } = useXpFloaterStore();
 
-  const [analysis,        setAnalysis]        = useState<TranscriptAnalysisDto | null>(null);
-  const [revealTranscript, setRevealTranscript] = useState('');
-  const [showReveal,      setShowReveal]       = useState(false);
-  const [commitResult,    setCommitResult]     = useState<CommitResultDto | null>(null);
-  const [showLevelUp,     setShowLevelUp]      = useState(false);
-  const [showConfirm,     setShowConfirm]      = useState(false);
-  const [confirmItems,    setConfirmItems]     = useState<ConfirmItem[]>([]);
-  const [navToast,        setNavToast]         = useState<{ label: string; icon: string } | null>(null);
+  const [commitResult, setCommitResult] = useState<CommitResultDto | null>(null);
+  const [showLevelUp,  setShowLevelUp]  = useState(false);
+  const [showConfirm,  setShowConfirm]  = useState(false);
+  const [confirmItems, setConfirmItems] = useState<ConfirmItem[]>([]);
+  const [navToast,     setNavToast]     = useState<{ label: string; icon: string } | null>(null);
 
-  const historyRef  = useRef<HistMsg[]>([]);
-  const handleSendRef = useRef<(text: string) => void>(() => {});
+  const historyRef     = useRef<HistMsg[]>([]);
+  const handleSendRef  = useRef<(text: string) => void>(() => {});
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // ── Build dialogue context ───────────────────────────────────────────
+  // Autoscroll on new turn or live transcript
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [turns, liveTranscript]);
+
+  // ── Build dialogue context ─────────────────────────────────────────
 
   const buildCtx = useCallback((): DialogueContext => ({
     hour:       new Date().getHours(),
@@ -301,7 +336,7 @@ export function VoiceAssistant() {
     habitNames: habits.filter(h => h.active).map(h => h.name),
   }), [habits]);
 
-  // ── Voice audio hook ─────────────────────────────────────────────────
+  // ── Voice audio hook ───────────────────────────────────────────────
 
   const { bars, supported, recogError, isListening, startListening, stopListening, stopAll, speak } = useVoiceAudio({
     onInterim: setLiveTranscript,
@@ -310,7 +345,7 @@ export function VoiceAssistant() {
     }, []),
   });
 
-  // ── Speak then auto-listen ───────────────────────────────────────────
+  // ── Speak → auto listen ────────────────────────────────────────────
 
   const speakThenListen = useCallback((text: string) => {
     setPhase('speaking');
@@ -320,26 +355,23 @@ export function VoiceAssistant() {
     });
   }, [speak, setPhase, startListening]);
 
-  // ── Proactive greeting on open ───────────────────────────────────────
+  // ── Proactive on open ──────────────────────────────────────────────
 
   useEffect(() => {
     if (!isOpen) return;
     clearTurns();
     setLiveTranscript('');
+    historyRef.current = [];
 
-    const ctx = buildCtx();
+    const ctx    = buildCtx();
     const script = shouldTriggerProactive(ctx);
     if (script) {
       const greeting = script.greeting(ctx.userName, ctx);
-      const steps = getScriptSteps(script.id, ctx);
+      const steps    = getScriptSteps(script.id, ctx);
       setPhase('proactive');
       setActiveScript({
-        id: script.id,
-        stepIndex: 0,
-        totalSteps: steps.length,
-        currentQuestion: greeting,
-        domain: script.domain,
-        collectedData: {},
+        id: script.id, stepIndex: 0, totalSteps: steps.length,
+        currentQuestion: greeting, domain: script.domain, collectedData: {},
       });
       addTurn({ role: 'system', text: greeting, domain: script.domain });
       speakThenListen(greeting);
@@ -347,20 +379,17 @@ export function VoiceAssistant() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  // ── Navigation from pending ──────────────────────────────────────────
+  // ── Pending navigation ─────────────────────────────────────────────
 
   useEffect(() => {
     if (!pendingNavigation) return;
     const path = pendingNavigation;
     setPendingNavigation(null);
-    const timer = setTimeout(() => {
-      router.push(path);
-      closeVoice();
-    }, 1200);
-    return () => clearTimeout(timer);
+    const t = setTimeout(() => { router.push(path); closeVoice(); }, 1200);
+    return () => clearTimeout(t);
   }, [pendingNavigation, router, closeVoice, setPendingNavigation]);
 
-  // ── Keyboard: SPACE + ESC ────────────────────────────────────────────
+  // ── Keyboard: SPACE + ESC ──────────────────────────────────────────
 
   useEffect(() => {
     if (!isOpen) return;
@@ -368,7 +397,7 @@ export function VoiceAssistant() {
       if (e.code === 'Space') {
         e.preventDefault();
         if (!isListening) { setPhase('listening'); startListening(); }
-        else { stopListening(); }
+        else stopListening();
       }
       if (e.code === 'Escape') { stopAll(); closeVoice(); }
     };
@@ -376,13 +405,13 @@ export function VoiceAssistant() {
     return () => window.removeEventListener('keydown', handler);
   }, [isOpen, isListening, setPhase, startListening, stopListening, stopAll, closeVoice]);
 
-  // ── Commit script ────────────────────────────────────────────────────
+  // ── Commit guided script ───────────────────────────────────────────
 
   const commitScript = useCallback(async () => {
     if (!activeScript) return;
     setShowConfirm(false);
     setPhase('thinking');
-    const ctx = buildCtx();
+    const ctx     = buildCtx();
     const payload = buildCommitPayload(activeScript.id, activeScript.collectedData, ctx);
 
     try {
@@ -403,11 +432,8 @@ export function VoiceAssistant() {
       if (res.ok) {
         const result: CommitResultDto = await res.json();
         const rewards = result.rewards_granted.map((r, i) => ({
-          id: `${Date.now()}-${i}`,
-          icon: r.icon,
-          label: `+${r.xp} XP`,
-          color: DOMAIN_COLORS[r.area] ?? '#9333EA',
-          x: 20 + Math.random() * 60,
+          id: `${Date.now()}-${i}`, icon: r.icon, label: `+${r.xp} XP`,
+          color: DOMAIN_COLORS[r.area] ?? '#9333EA', x: 20 + Math.random() * 60,
         }));
         if (rewards.length) triggerRewards(rewards);
         if (result.leveled_up) { setCommitResult(result); setShowLevelUp(true); }
@@ -417,7 +443,37 @@ export function VoiceAssistant() {
     } catch { /* ignore */ }
   }, [activeScript, buildCtx, setPhase, triggerRewards, speakThenListen, setActiveScript]);
 
-  // ── Main send handler ────────────────────────────────────────────────
+  // ── Auto-commit: fire & award XP silently after topic detection ────
+
+  const autoCommit = useCallback(async (transcript: string) => {
+    try {
+      const res = await fetch('/api/proxy/claude/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript,
+          goal_titles: [],
+          create_journal_entry: false,
+          mood: null,
+          expenses: [],
+          content_ideas: [],
+          habit_mentions: [],
+          xp_rewards: [],
+        }),
+      });
+      if (res.ok) {
+        const result: CommitResultDto = await res.json();
+        const rewards = result.rewards_granted.map((r, i) => ({
+          id: `${Date.now()}-${i}`, icon: r.icon, label: `+${r.xp} XP`,
+          color: DOMAIN_COLORS[r.area] ?? '#9333EA', x: 20 + Math.random() * 60,
+        }));
+        if (rewards.length) triggerRewards(rewards);
+        if (result.leveled_up) { setCommitResult(result); setShowLevelUp(true); }
+      }
+    } catch { /* silent */ }
+  }, [triggerRewards]);
+
+  // ── Main send handler ──────────────────────────────────────────────
 
   const handleSend = useCallback(async (text: string) => {
     setLiveTranscript('');
@@ -426,22 +482,21 @@ export function VoiceAssistant() {
 
     const command = parseVoiceCommand(text);
 
-    // ── Navigation ───────────────────────────────────────────────────
-
+    // Navigation
     if (command.type === 'navigate' && command.confidence >= 0.6) {
-      const route = command.payload.route!;
+      const route  = command.payload.route!;
       const domain = command.payload.domain!;
       const routeLabels: Record<string, { label: string; icon: string }> = {
-        '/habits': { label: 'Habits', icon: '🌱' },
-        '/finance': { label: 'Finance', icon: '💰' },
-        '/career': { label: 'Career', icon: '🚀' },
-        '/journal': { label: 'Journal', icon: '📓' },
-        '/brand': { label: 'Brand RPG', icon: '⚡' },
-        '/gratitude': { label: 'Gratitude', icon: '🙏' },
-        '/content': { label: 'Content', icon: '📱' },
-        '/levels': { label: 'Levels', icon: '⭐' },
-        '/claude': { label: 'Claude', icon: '🤖' },
-        '/': { label: 'Dashboard', icon: '🏠' },
+        '/habits':    { label: 'Habits',     icon: '🌱' },
+        '/finance':   { label: 'Finance',    icon: '💰' },
+        '/career':    { label: 'Career',     icon: '🚀' },
+        '/journal':   { label: 'Journal',    icon: '📓' },
+        '/brand':     { label: 'Brand RPG',  icon: '⚡' },
+        '/gratitude': { label: 'Gratitude',  icon: '🙏' },
+        '/content':   { label: 'Content',    icon: '📱' },
+        '/levels':    { label: 'Levels',     icon: '⭐' },
+        '/claude':    { label: 'Claude',     icon: '🤖' },
+        '/':          { label: 'Dashboard',  icon: '🏠' },
       };
       setNavToast(routeLabels[route] ?? { label: route, icon: '→' });
       setActiveDomain(domain);
@@ -451,36 +506,40 @@ export function VoiceAssistant() {
       return;
     }
 
-    // ── Proactive script triggers ─────────────────────────────────────
-
-    if (command.type === 'start_morning_check' || command.type === 'start_todo_creation' || command.type === 'start_weekly_checkin') {
+    // Proactive script triggers
+    if (
+      command.type === 'start_morning_check' ||
+      command.type === 'start_todo_creation' ||
+      command.type === 'start_weekly_checkin'
+    ) {
       const scriptId = command.type === 'start_morning_check' ? 'morning_habits'
         : command.type === 'start_todo_creation' ? 'todo_creation'
         : 'weekly_checkin';
       const script = getScript(scriptId);
       if (script) {
-        const ctx = buildCtx();
-        const steps = getScriptSteps(scriptId, ctx);
+        const ctx     = buildCtx();
+        const steps   = getScriptSteps(scriptId, ctx);
         const greeting = script.greeting(ctx.userName, ctx);
-        setActiveScript({ id: scriptId, stepIndex: 0, totalSteps: steps.length, currentQuestion: greeting, domain: script.domain, collectedData: {} });
+        setActiveScript({
+          id: scriptId, stepIndex: 0, totalSteps: steps.length,
+          currentQuestion: greeting, domain: script.domain, collectedData: {},
+        });
         addTurn({ role: 'system', text: greeting, domain: script.domain });
         speakThenListen(greeting);
         return;
       }
     }
 
-    // ── Active script: advance turn ──────────────────────────────────
-
+    // Active dialogue script
     if (activeScript) {
       const ctx = buildCtx();
 
-      // Confirmation phase
       if (showConfirm) {
         if (command.type === 'confirmed') { await commitScript(); return; }
         if (command.type === 'rejected') {
           setShowConfirm(false);
           const step = getScriptSteps(activeScript.id, ctx)[activeScript.stepIndex];
-          const q = step?.buildQuestion(activeScript.collectedData, ctx) ?? 'Riproviamo. Cosa vuoi fare?';
+          const q    = step?.buildQuestion(activeScript.collectedData, ctx) ?? 'Riproviamo. Cosa vuoi fare?';
           addTurn({ role: 'system', text: q, domain: activeScript.domain });
           speakThenListen(q);
           return;
@@ -488,12 +547,18 @@ export function VoiceAssistant() {
       }
 
       const result = advanceScript(activeScript.id, activeScript.stepIndex, text, activeScript.collectedData, ctx);
-      const updated = { ...activeScript, stepIndex: result.nextStepIndex === 'confirm' || result.nextStepIndex === 'done' ? activeScript.stepIndex : result.nextStepIndex as number, collectedData: result.updatedCollected };
+      const updated = {
+        ...activeScript,
+        stepIndex: (result.nextStepIndex === 'confirm' || result.nextStepIndex === 'done')
+          ? activeScript.stepIndex
+          : result.nextStepIndex as number,
+        collectedData: result.updatedCollected,
+      };
       setActiveScript(updated);
 
       if (result.nextStepIndex === 'confirm') {
         const script = getScript(activeScript.id);
-        const items = script?.buildConfirmation(result.updatedCollected, ctx) ?? [];
+        const items  = script?.buildConfirmation(result.updatedCollected, ctx) ?? [];
         setConfirmItems(items);
         setShowConfirm(true);
         setPhase('confirming');
@@ -509,14 +574,11 @@ export function VoiceAssistant() {
         speakThenListen(result.nextQuestion);
         return;
       }
-
       return;
     }
 
-    // ── Fallthrough: Claude conversation ─────────────────────────────
-
+    // Fallthrough: free Claude conversation
     const historySnapshot = historyRef.current;
-
     try {
       const res = await fetch('/api/proxy/claude/ask', {
         method: 'POST',
@@ -527,9 +589,7 @@ export function VoiceAssistant() {
       if (!res.ok || !res.body) throw new Error();
 
       let fullReply = '';
-      for await (const delta of readSseStream(res.body)) {
-        fullReply += delta;
-      }
+      for await (const delta of readSseStream(res.body)) { fullReply += delta; }
 
       const reply = fullReply || 'Scusa, non ho ricevuto risposta.';
       historyRef.current = [...historySnapshot, { role: 'user', content: text }, { role: 'assistant', content: reply }];
@@ -537,7 +597,7 @@ export function VoiceAssistant() {
       setPhase('speaking');
       speak(stripMarkdown(reply), () => setPhase('idle'));
 
-      // Domain detection from analysis
+      // Analyze + auto-commit if topics detected
       if (text.length > 20) {
         fetch('/api/proxy/claude/analyze', {
           method: 'POST',
@@ -545,21 +605,18 @@ export function VoiceAssistant() {
           body: JSON.stringify({ transcript: text }),
         })
           .then(r => r.json())
-          .then((a: TranscriptAnalysisDto) => {
+          .then(async (a: TranscriptAnalysisDto) => {
             if (a.topics.length > 0) {
               const domain = a.topics[0].area;
               setActiveDomain(domain);
               triggerParticleBurst({ count: 20, color: DOMAIN_COLORS[domain] ?? '#9333EA' });
+              await autoCommit(text);
             }
-            setAnalysis(a);
-            setRevealTranscript(text);
-            setShowReveal(true);
             saveVoiceSession({
               id: Date.now().toString(),
               date: new Date().toISOString().split('T')[0],
               timestamp: new Date().toISOString(),
-              transcript: text,
-              analysis: a,
+              transcript: text, analysis: a,
               coachingMessage: a.coaching_message,
             });
             updateAreaStreaks(a);
@@ -574,15 +631,15 @@ export function VoiceAssistant() {
   }, [
     addTurn, setLiveTranscript, setPhase, setActiveDomain, setActiveScript,
     activeScript, buildCtx, speak, speakThenListen, stopAll, showConfirm,
-    commitScript, triggerParticleBurst, setPendingNavigation,
+    commitScript, triggerParticleBurst, setPendingNavigation, autoCommit,
   ]);
 
   useEffect(() => { handleSendRef.current = handleSend; }, [handleSend]);
 
-  // ── Derived ──────────────────────────────────────────────────────────
+  // ── Derived ────────────────────────────────────────────────────────
 
-  const stateColor = PHASE_COLORS[phase] ?? '#9333EA';
-  const domainColor = activeDomain ? (DOMAIN_COLORS[activeDomain] ?? '#9333EA') : stateColor;
+  const stateColor    = PHASE_COLORS[phase] ?? '#9333EA';
+  const domainColor   = activeDomain ? (DOMAIN_COLORS[activeDomain] ?? '#9333EA') : stateColor;
   const isActivePhase = phase === 'listening' || phase === 'speaking' || phase === 'proactive';
 
   if (!supported) return null;
@@ -595,247 +652,133 @@ export function VoiceAssistant() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden"
-            style={{ background: 'rgba(5,2,16,0.94)', backdropFilter: 'blur(28px)' }}
-            onClick={e => { if (e.target === e.currentTarget) { stopAll(); closeVoice(); } }}
+            transition={{ duration: 0.22 }}
+            className="fixed inset-0 z-50 flex flex-col overflow-hidden"
+            style={{ background: 'rgba(5,2,16,0.96)', backdropFilter: 'blur(32px)' }}
           >
-            {/* Layer 1: Domain ambient orb */}
+            {/* Domain ambient glow */}
             {activeDomain && (
               <motion.div
                 className="absolute pointer-events-none"
                 style={{
-                  width: 600, height: 600,
-                  borderRadius: '50%',
-                  background: `radial-gradient(circle, ${domainColor}30 0%, transparent 70%)`,
+                  top: '30%', left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: 600, height: 600, borderRadius: '50%',
+                  background: `radial-gradient(circle, ${domainColor}22 0%, transparent 70%)`,
                   filter: 'blur(80px)',
                 }}
-                animate={{ opacity: [0.12, 0.22, 0.12] }}
-                transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                animate={{ opacity: [0.1, 0.2, 0.1] }}
+                transition={{ duration: 4, repeat: Infinity }}
               />
             )}
-
-            {/* Layer 2: Ambient particles */}
             <AmbientParticles color={domainColor} />
-
-            {/* Layer 2b: Burst particles */}
             {particleBurst && (
-              <BurstParticles
-                color={particleBurst.color}
-                onDone={clearParticleBurst}
-              />
+              <BurstParticles color={particleBurst.color} onDone={clearParticleBurst} />
             )}
 
-            {/* Close button */}
-            <button
-              onClick={() => { stopAll(); closeVoice(); }}
-              className="absolute top-5 right-5 w-9 h-9 rounded-full flex items-center justify-center z-10"
-              style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(226,232,240,0.6)' }}
-            >
-              <X size={16} />
-            </button>
-
-            {/* Layer 3–4: Blob orb + radial waveform */}
-            <div className="relative flex items-center justify-center" style={{ width: 200, height: 200 }}>
-              {/* Ripple rings */}
-              {isActivePhase && [1, 2, 3].map(i => (
-                <motion.div
-                  key={i}
-                  className="absolute rounded-full"
-                  style={{ inset: 0, border: `1px solid ${stateColor}` }}
-                  animate={{ scale: [1, 1 + i * 0.4], opacity: [0.5, 0] }}
-                  transition={{ duration: 2, delay: i * 0.5, repeat: Infinity, ease: 'easeOut' }}
+            {/* ── Top bar ── */}
+            <div className="relative z-10 flex items-center justify-between px-5 py-4 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <motion.span
+                  className="inline-block w-1.5 h-1.5 rounded-full"
+                  style={{ background: stateColor }}
+                  animate={{
+                    opacity: isActivePhase ? [1, 0.3, 1] : 1,
+                    scale:   isActivePhase ? [1, 1.3, 1] : 1,
+                  }}
+                  transition={{ duration: 1.1, repeat: isActivePhase ? Infinity : 0 }}
                 />
-              ))}
-
-              {/* Radial waveform */}
-              <RadialWaveform bars={bars} color={stateColor} active={isActivePhase} />
-
-              {/* Morphing blob */}
-              <motion.button
-                onClick={() => {
-                  if (!isListening) { setPhase('listening'); startListening(); }
-                  else { stopListening(); }
-                }}
-                className="relative z-10 flex items-center justify-center"
-                style={{
-                  width: 120, height: 120,
-                  background: `radial-gradient(circle at 35% 35%, ${stateColor}80, ${stateColor}30)`,
-                  border: `2px solid ${stateColor}`,
-                  boxShadow: `0 0 60px ${stateColor}50, inset 0 0 30px ${stateColor}15`,
-                  animation: 'blobMorph 8s ease-in-out infinite',
-                }}
-                animate={phase === 'thinking' ? { rotate: 360 } : {}}
-                transition={phase === 'thinking' ? { duration: 2, repeat: Infinity, ease: 'linear' } : {}}
-                whileHover={{ scale: 1.04 }}
-                whileTap={{ scale: 0.92 }}
-              >
-                {(phase === 'idle' || phase === 'listening') && <Mic size={40} color={stateColor} />}
-                {phase === 'thinking' && (
-                  <motion.div animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 0.7, repeat: Infinity }}>
-                    <Volume2 size={36} color={stateColor} />
-                  </motion.div>
-                )}
-                {(phase === 'speaking' || phase === 'proactive') && <Volume2 size={40} color={stateColor} />}
-                {phase === 'confirming' && <span style={{ fontSize: 36 }}>⚡</span>}
-              </motion.button>
-            </div>
-
-            {/* Linear waveform strip — visible proof that mic is capturing */}
-            <AnimatePresence>
-              {isListening && (
-                <motion.div
-                  initial={{ opacity: 0, scaleY: 0 }}
-                  animate={{ opacity: 1, scaleY: 1 }}
-                  exit={{ opacity: 0, scaleY: 0 }}
-                  className="mt-3"
-                >
-                  <LinearWaveform bars={bars} color={stateColor} />
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Dynamic status row */}
-            <div className="mt-2 flex items-center gap-2">
-              {isListening && (
                 <span
-                  className="inline-block w-2 h-2 rounded-full flex-shrink-0"
-                  style={{ background: '#EF4444', animation: 'pulse 0.8s ease-in-out infinite' }}
-                />
-              )}
-              <p className="text-xs font-inter font-semibold tracking-widest uppercase" style={{ color: stateColor }}>
-                {isListening && liveTranscript
-                  ? `Captando · ${liveTranscript.trim().split(/\s+/).length} parole`
-                  : isListening
-                  ? 'Mic attivo — parla ora'
-                  : PHASE_LABELS[phase]}
-              </p>
+                  className="text-xs font-inter font-semibold tracking-widest uppercase"
+                  style={{ color: stateColor, opacity: 0.82 }}
+                >
+                  {PHASE_LABELS[phase]}
+                </span>
+              </div>
+              <button
+                onClick={() => { stopAll(); closeVoice(); }}
+                className="w-8 h-8 rounded-full flex items-center justify-center"
+                style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(226,232,240,0.45)' }}
+              >
+                <X size={14} />
+              </button>
             </div>
 
-            {/* Error banner */}
-            {recogError && (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                className="mt-3 px-4 py-2 rounded-xl text-xs font-inter text-center"
-                style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#FCA5A5' }}
-              >
-                Errore mic: <strong>{recogError}</strong>
-                {recogError === 'not-allowed' && ' — controlla permessi browser'}
-                {recogError === 'network' && ' — richiede connessione internet'}
-              </motion.div>
-            )}
+            {/* ── Orb section ── */}
+            <div className="relative flex items-center justify-center py-3 flex-shrink-0">
+              <div className="relative flex items-center justify-center" style={{ width: 170, height: 170 }}>
 
-            {/* Layer 6: Live transcript */}
-            <AnimatePresence>
-              {(isListening || phase === 'proactive' || phase === 'thinking' || liveTranscript) && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                  className="mt-5 w-full max-w-sm px-4 space-y-2"
-                >
-                  <div
-                    className="w-full rounded-2xl px-4 py-3 min-h-[52px] max-h-32 overflow-y-auto"
-                    style={{
-                      background: 'rgba(201,168,76,0.07)',
-                      border: '1px solid rgba(201,168,76,0.28)',
-                      scrollbarWidth: 'thin',
-                      scrollbarColor: 'rgba(201,168,76,0.2) transparent',
-                    }}
-                  >
-                    {liveTranscript ? (
-                      <p className="text-sm font-inter leading-relaxed" style={{ color: '#E2E8F0' }}>
-                        {liveTranscript}
-                        <span className="inline-block w-0.5 h-3.5 ml-0.5 align-middle rounded-full"
-                          style={{ background: '#C9A84C', animation: 'pulse 1s ease-in-out infinite' }} />
-                      </p>
-                    ) : phase === 'thinking' ? (
-                      <p className="text-xs font-inter" style={{ color: 'rgba(192,132,252,0.7)' }}>
-                        Elaborando…
-                      </p>
-                    ) : isListening ? (
-                      <div className="flex items-center gap-2">
-                        <span className="inline-block w-2 h-2 rounded-full flex-shrink-0"
-                          style={{ background: '#EF4444', animation: 'pulse 0.8s ease-in-out infinite' }} />
-                        <p className="text-xs font-inter" style={{ color: 'rgba(201,168,76,0.6)' }}>
-                          Microfono attivo · attendo voce…
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-xs font-inter" style={{ color: 'rgba(226,232,240,0.25)' }}>
-                        Tocca il cerchio o premi SPACE per registrare
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Send button — always visible while recording */}
-                  {isListening && (
-                    <motion.button
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      onClick={stopListening}
-                      className="w-full py-2.5 rounded-2xl text-sm font-inter font-bold flex items-center justify-center gap-2"
-                      style={{
-                        background: liveTranscript
-                          ? 'linear-gradient(135deg, rgba(201,168,76,0.3), rgba(201,168,76,0.15))'
-                          : 'rgba(255,255,255,0.04)',
-                        border: `1px solid ${liveTranscript ? 'rgba(201,168,76,0.6)' : 'rgba(255,255,255,0.12)'}`,
-                        color: liveTranscript ? '#F0C96E' : 'rgba(226,232,240,0.35)',
-                        cursor: liveTranscript ? 'pointer' : 'default',
-                      }}
-                    >
-                      <span
-                        className="inline-block w-2 h-2 rounded-full"
-                        style={{ background: '#EF4444', animation: 'pulse 1s ease-in-out infinite' }}
-                      />
-                      {liveTranscript ? '↑ Invia ora' : 'In ascolto…'}
-                    </motion.button>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Layer 5: Dialogue turns */}
-            {turns.length > 0 && (
-              <div
-                className="mt-4 w-full max-w-sm px-4 max-h-52 overflow-y-auto space-y-2"
-                style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(147,51,234,0.2) transparent' }}
-              >
-                {turns.slice(-6).map((turn: DialogueTurn, i: number) => (
+                {/* Ripple rings */}
+                {isActivePhase && [1, 2].map(i => (
                   <motion.div
                     key={i}
-                    initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                    transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                    className={`flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className="max-w-[88%] px-3 py-2.5 rounded-xl text-xs font-inter"
-                      style={turn.role === 'user' ? {
-                        background: 'linear-gradient(135deg, rgba(107,33,168,0.5), rgba(59,13,122,0.5))',
-                        border: '1px solid rgba(147,51,234,0.3)', color: '#E2E8F0',
-                      } : {
-                        background: 'rgba(255,255,255,0.04)',
-                        border: `1px solid ${turn.domain ? DOMAIN_COLORS[turn.domain] + '30' : 'rgba(255,255,255,0.07)'}`,
-                        color: '#E2E8F0',
-                      }}
-                    >
-                      {turn.role === 'user' ? (
-                        <p className="leading-relaxed">{turn.text}</p>
-                      ) : (
-                        <VoiceMsg content={turn.text} />
-                      )}
-                    </div>
-                  </motion.div>
+                    className="absolute rounded-full"
+                    style={{ inset: 0, border: `1px solid ${stateColor}` }}
+                    animate={{ scale: [1, 1 + i * 0.48], opacity: [0.35, 0] }}
+                    transition={{ duration: 2.8, delay: i * 0.75, repeat: Infinity, ease: 'easeOut' }}
+                  />
                 ))}
-              </div>
-            )}
 
-            {/* Layer 7: Navigation toast */}
+                {/* Radial waveform */}
+                <RadialWaveform bars={bars} color={stateColor} active={isActivePhase} />
+
+                {/* Apple-style orb — frosted glass */}
+                <motion.button
+                  onClick={() => {
+                    if (!isListening) { setPhase('listening'); startListening(); }
+                    else stopListening();
+                  }}
+                  className="relative z-10 flex items-center justify-center"
+                  style={{
+                    width: 84, height: 84,
+                    borderRadius: '50%',
+                    background: isListening
+                      ? 'rgba(239,68,68,0.1)'
+                      : 'rgba(255,255,255,0.07)',
+                    border: `1.5px solid ${isListening ? 'rgba(239,68,68,0.4)' : `${stateColor}40`}`,
+                    backdropFilter: 'blur(24px)',
+                    WebkitBackdropFilter: 'blur(24px)',
+                    boxShadow: `0 0 48px ${stateColor}28, inset 0 1px 0 rgba(255,255,255,0.10)`,
+                  }}
+                  animate={phase === 'thinking' ? { rotate: 360 } : {}}
+                  transition={phase === 'thinking' ? { duration: 2.5, repeat: Infinity, ease: 'linear' } : {}}
+                  whileHover={{ scale: 1.06 }}
+                  whileTap={{ scale: 0.93 }}
+                >
+                  {phase === 'thinking' ? (
+                    <TypingDots color={stateColor} />
+                  ) : isListening ? (
+                    // Recording state: red square stop indicator
+                    <motion.span
+                      className="block w-3.5 h-3.5 rounded-sm"
+                      style={{ background: '#EF4444' }}
+                      animate={{ opacity: [1, 0.35, 1], scale: [1, 1.15, 1] }}
+                      transition={{ duration: 0.75, repeat: Infinity }}
+                    />
+                  ) : phase === 'speaking' || phase === 'proactive' ? (
+                    <motion.div
+                      animate={{ scale: [1, 1.12, 1] }}
+                      transition={{ duration: 0.9, repeat: Infinity }}
+                    >
+                      <MicSVG color={stateColor} />
+                    </motion.div>
+                  ) : phase === 'confirming' ? (
+                    <span style={{ fontSize: 26 }}>⚡</span>
+                  ) : (
+                    <MicSVG color={stateColor} />
+                  )}
+                </motion.button>
+              </div>
+            </div>
+
+            {/* Nav toast */}
             <AnimatePresence>
               {navToast && (
                 <motion.div
-                  initial={{ opacity: 0, y: 16, scale: 0.95 }}
+                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
-                  className="absolute top-16 flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-inter font-semibold"
+                  className="absolute top-16 self-center flex items-center gap-2 px-4 py-2 rounded-full text-sm font-inter font-semibold z-20"
                   style={{
                     background: 'rgba(255,255,255,0.08)',
                     border: `1px solid ${domainColor}50`,
@@ -846,26 +789,120 @@ export function VoiceAssistant() {
                 >
                   <span>{navToast.icon}</span>
                   <span>Navigando su {navToast.label}</span>
-                  <span style={{ opacity: 0.6 }}>↗</span>
+                  <span style={{ opacity: 0.45 }}>↗</span>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {/* Layer 8: Confirmation bottom-sheet */}
+            {/* Error banner */}
+            {recogError && (
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                className="mx-4 mb-2 px-4 py-2 rounded-xl text-xs font-inter text-center flex-shrink-0"
+                style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.28)', color: '#FCA5A5' }}
+              >
+                Errore mic: <strong>{recogError}</strong>
+                {recogError === 'not-allowed' && ' — controlla permessi browser'}
+                {recogError === 'network' && ' — richiede connessione internet'}
+              </motion.div>
+            )}
+
+            {/* ── Chat messages — flex-1, scrollable ── */}
+            <div
+              className="flex-1 overflow-y-auto px-4 py-2 space-y-2 min-h-0"
+              style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(147,51,234,0.18) transparent' }}
+            >
+              {turns.map((turn: DialogueTurn, i: number) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 26 }}
+                  className={`flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className="max-w-[85%] px-3.5 py-2.5 rounded-2xl text-xs font-inter leading-relaxed"
+                    style={turn.role === 'user' ? {
+                      background: 'linear-gradient(135deg, rgba(107,33,168,0.5), rgba(59,13,122,0.5))',
+                      border: '1px solid rgba(147,51,234,0.28)',
+                      color: '#E2E8F0',
+                    } : {
+                      background: 'rgba(255,255,255,0.05)',
+                      border: `1px solid ${turn.domain ? DOMAIN_COLORS[turn.domain] + '28' : 'rgba(255,255,255,0.08)'}`,
+                      color: '#E2E8F0',
+                    }}
+                  >
+                    {turn.role === 'user' ? (
+                      <p>{turn.text}</p>
+                    ) : (
+                      <VoiceMsg content={turn.text} />
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+
+              {/* Live transcript bubble (inline, user side) */}
+              {liveTranscript && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex justify-end"
+                >
+                  <div
+                    className="max-w-[85%] px-3.5 py-2.5 rounded-2xl text-xs font-inter"
+                    style={{
+                      background: 'rgba(201,168,76,0.08)',
+                      border: '1px solid rgba(201,168,76,0.26)',
+                      color: '#E2E8F0',
+                    }}
+                  >
+                    {liveTranscript}
+                    <motion.span
+                      className="inline-block w-0.5 h-3 ml-0.5 align-middle rounded-full"
+                      style={{ background: '#C9A84C' }}
+                      animate={{ opacity: [1, 0, 1] }}
+                      transition={{ duration: 0.85, repeat: Infinity }}
+                    />
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Thinking dots */}
+              {phase === 'thinking' && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex justify-start"
+                >
+                  <div
+                    className="rounded-2xl px-4 py-3"
+                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
+                  >
+                    <TypingDots color={stateColor} />
+                  </div>
+                </motion.div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* ── Confirm bottom-sheet ── */}
             <AnimatePresence>
               {showConfirm && confirmItems.length > 0 && (
                 <motion.div
                   initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
                   transition={{ type: 'spring', stiffness: 280, damping: 28 }}
-                  className="absolute bottom-0 w-full max-w-sm rounded-t-3xl px-6 pt-5 pb-8"
-                  style={{ background: 'rgba(17,8,48,0.97)', border: '1px solid rgba(147,51,234,0.25)' }}
+                  className="flex-shrink-0 w-full rounded-t-3xl px-6 pt-5 pb-4 z-10"
+                  style={{ background: 'rgba(17,8,48,0.97)', border: '1px solid rgba(147,51,234,0.18)' }}
                   onClick={e => e.stopPropagation()}
                 >
-                  <p className="font-syne font-black text-base mb-3" style={{ color: '#E2E8F0' }}>Ho capito:</p>
+                  <p className="font-syne font-black text-sm mb-3" style={{ color: '#E2E8F0' }}>
+                    Ho capito:
+                  </p>
                   <div className="divide-y divide-white/5">
                     {confirmItems.map((item, i) => <ConfirmRow key={i} item={item} />)}
                   </div>
-                  <div className="flex gap-3 mt-5">
+                  <div className="flex gap-3 mt-4">
                     <button
                       onClick={commitScript}
                       className="flex-1 py-2.5 rounded-2xl text-sm font-inter font-bold flex items-center justify-center gap-2"
@@ -879,7 +916,7 @@ export function VoiceAssistant() {
                         const ctx = buildCtx();
                         if (activeScript) {
                           const step = getScriptSteps(activeScript.id, ctx)[activeScript.stepIndex];
-                          const q = step?.buildQuestion(activeScript.collectedData, ctx) ?? 'Riproviamo.';
+                          const q    = step?.buildQuestion(activeScript.collectedData, ctx) ?? 'Riproviamo.';
                           speakThenListen(q);
                         }
                       }}
@@ -893,37 +930,22 @@ export function VoiceAssistant() {
               )}
             </AnimatePresence>
 
-            {/* Text input bar — always works, even when voice doesn't */}
+            {/* ── Bottom: compact fixed input bar ── */}
             {!showConfirm && (
-              <TextInputBar
-                onSend={(text) => {
-                  handleSendRef.current(text);
-                }}
-                disabled={phase === 'thinking' || phase === 'speaking'}
-              />
+              <div className="flex-shrink-0 px-4 pb-6 pt-2 z-10">
+                <CompactInputBar
+                  isListening={isListening}
+                  liveTranscript={liveTranscript}
+                  disabled={phase === 'thinking' || phase === 'speaking'}
+                  onMicToggle={() => {
+                    if (!isListening) { setPhase('listening'); startListening(); }
+                    else stopListening();
+                  }}
+                  onSend={(text) => handleSendRef.current(text)}
+                />
+              </div>
             )}
           </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* TranscriptReveal overlay */}
-      <AnimatePresence>
-        {showReveal && analysis && (
-          <TranscriptReveal
-            transcript={revealTranscript}
-            analysis={analysis}
-            onClose={() => setShowReveal(false)}
-            onCommit={(result) => {
-              const rewards = result.rewards_granted.map((r, i) => ({
-                id: `${Date.now()}-${i}`,
-                icon: r.icon, label: `+${r.xp} XP`,
-                color: DOMAIN_COLORS[r.area] ?? '#9333EA',
-                x: 20 + Math.random() * 60,
-              }));
-              if (rewards.length) triggerRewards(rewards);
-              if (result.leveled_up) { setCommitResult(result); setShowLevelUp(true); }
-            }}
-          />
         )}
       </AnimatePresence>
 
