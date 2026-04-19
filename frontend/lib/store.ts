@@ -157,6 +157,21 @@ export const useXpFloaterStore = create<XpFloaterStore>((set) => ({
     set((s) => ({ rewards: s.rewards.filter((r) => r.id !== id) })),
 }));
 
+// ── XP persistence store ───────────────────────────────────────────────────
+// Tracks total XP optimistically; synced from backend on load.
+
+interface XpStore {
+  totalXp: number;
+  setTotalXp: (xp: number) => void;
+  addXp: (delta: number) => void;
+}
+
+export const useXpStore = create<XpStore>((set) => ({
+  totalXp: 0,
+  setTotalXp: (xp) => set({ totalXp: xp }),
+  addXp: (delta) => set((s) => ({ totalXp: s.totalXp + delta })),
+}));
+
 // ── Voice Assistant store ──────────────────────────────────────────────────
 
 export const DOMAIN_COLORS: Record<string, string> = {

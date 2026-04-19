@@ -3,9 +3,17 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { TierMap } from '@/components/xp/TierMap';
 import { XP_ACTIONS, tierForLevel, levelFromTotalXp, xpToNextLevel } from '@/lib/xp';
+import { useXpStore } from '@/lib/store';
 
 export default function LevelsPage() {
-  const [totalXp, setTotalXp] = useState(0);
+  const { totalXp: storeXp, setTotalXp: setStoreXp, addXp } = useXpStore();
+  const [totalXp, setTotalXpLocal] = useState(0);
+
+  // Keep local + store in sync
+  function setTotalXp(xp: number) {
+    setTotalXpLocal(xp);
+    setStoreXp(xp);
+  }
   const [level, setLevel]     = useState(1);
   const [currentXp, setCurrentXp] = useState(0);
   const [xpNext, setXpNext]   = useState(1000);
@@ -25,7 +33,14 @@ export default function LevelsPage() {
         }
       })
       .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Live update from voice XP gains — storeXp is optimistically incremented
+  useEffect(() => {
+    if (storeXp > totalXp) setTotalXpLocal(storeXp);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeXp]);
 
   const derived = levelFromTotalXp(totalXp);
   const displayLevel = derived.level;
@@ -42,7 +57,9 @@ export default function LevelsPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setTotalXp(prev => prev + (data.xpGained ?? action.xp));
+        const gained = data.xpGained ?? action.xp;
+        setTotalXpLocal(prev => prev + gained);
+        addXp(gained);
         setLastGain({ xp: data.xpGained ?? action.xp, label: action.label });
         setTimeout(() => setLastGain(null), 2500);
       }
