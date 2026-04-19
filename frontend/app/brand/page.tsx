@@ -6,6 +6,7 @@ import { StatsRadar } from '@/components/brand/StatsRadar';
 import { SkillTreeVisual } from '@/components/brand/SkillTreeVisual';
 import { AchievementBadge } from '@/components/brand/AchievementBadge';
 import { XpLogForm } from '@/components/brand/XpLogForm';
+import { PageVoiceEntry } from '@/components/voice/PageVoiceEntry';
 
 const TABS = ['Stats', 'Skill Trees', 'Achievements', 'Log XP'];
 
@@ -74,6 +75,8 @@ export default function BrandPage() {
           <p className="text-sm" style={{ color: 'rgba(226,232,240,0.4)' }}>Backend offline</p>
         </div>
       )}
+
+      <PageVoiceEntry domain="brand" />
 
       {/* Tab bar */}
       <div

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { KanbanBoard } from '@/components/content/KanbanBoard';
+import { PageVoiceEntry } from '@/components/voice/PageVoiceEntry';
 
 interface ContentItem {
   id: string;
@@ -50,6 +51,8 @@ export default function ContentPage() {
           {items.length} items
         </span>
       </motion.div>
+
+      <PageVoiceEntry domain="content" />
 
       <p className="text-xs" style={{ color: 'rgba(226,232,240,0.35)' }}>
         Drag cards between columns to update status

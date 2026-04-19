@@ -5,6 +5,7 @@ import { CheckCircle2, Circle, Target, CalendarDays, ListTodo, Trophy } from 'lu
 import { DailyView } from '@/components/goals/DailyView';
 import { GoalTimeline } from '@/components/goals/GoalTimeline';
 import { Top10Goals } from '@/components/goals/Top10Goals';
+import { PageVoiceEntry } from '@/components/voice/PageVoiceEntry';
 
 type CareerTab = 'daily' | 'goals' | 'timeline' | 'top10';
 
@@ -153,6 +154,8 @@ export default function CareerPage() {
       >
         Career
       </motion.h1>
+
+      <PageVoiceEntry domain="career" />
 
       {/* Tab bar */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">

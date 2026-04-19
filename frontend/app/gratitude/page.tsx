@@ -8,6 +8,7 @@ import {
   GRATITUDE_PROMPTS,
   LOW_CORTISOL_TIPS,
 } from '@/lib/gratitude';
+import { PageVoiceEntry } from '@/components/voice/PageVoiceEntry';
 
 interface GratitudeEntry {
   id: string;
@@ -113,6 +114,9 @@ export default function GratitudePage() {
           {isEvening ? 'Evening reflection' : 'Morning practice'} · {new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
       </motion.div>
+
+      {/* Voice entry */}
+      <PageVoiceEntry domain="gratitude" />
 
       {/* Cortisol tip rotator */}
       <AnimatePresence mode="wait">

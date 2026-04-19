@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { TrendingUp } from 'lucide-react';
 import { RalSimulator } from '@/components/finance/RalSimulator';
+import { PageVoiceEntry } from '@/components/voice/PageVoiceEntry';
 
 interface FinanceSummary {
   currentRal: number;
@@ -47,6 +48,8 @@ export default function FinancePage() {
       >
         Finance
       </motion.h1>
+
+      <PageVoiceEntry domain="finance" />
 
       {!data ? (
         <div className="glass text-center py-14" style={{ borderRadius: '1.25rem', borderStyle: 'dashed' }}>

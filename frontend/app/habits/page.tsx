@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { HabitGrid } from '@/components/habits/HabitGrid';
 import { StreakFire } from '@/components/habits/StreakFire';
 import { HabitCheckIn } from '@/components/habits/HabitCheckIn';
+import { PageVoiceEntry } from '@/components/voice/PageVoiceEntry';
 
 interface Habit {
   id: string;
@@ -57,6 +58,8 @@ export default function HabitsPage() {
         </h1>
         {maxStreak > 0 && <StreakFire streak={maxStreak} />}
       </motion.div>
+
+      <PageVoiceEntry domain="habits" />
 
       {habits.length === 0 && (
         <motion.div

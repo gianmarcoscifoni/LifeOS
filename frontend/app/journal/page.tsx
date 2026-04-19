@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { MoodChart } from '@/components/journal/MoodChart';
+import { PageVoiceEntry } from '@/components/voice/PageVoiceEntry';
 
 interface JournalEntry {
   id: string;
@@ -55,6 +56,8 @@ export default function JournalPage() {
       >
         Journal
       </motion.h1>
+
+      <PageVoiceEntry domain="journal" />
 
       {moodTrend.length > 0 && (
         <motion.div
