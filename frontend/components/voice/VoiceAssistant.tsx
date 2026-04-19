@@ -245,8 +245,8 @@ function CompactInputBar({
           isListening && liveTranscript
             ? liveTranscript.slice(0, 42) + (liveTranscript.length > 42 ? '…' : '')
             : isListening
-            ? 'In ascolto…'
-            : 'Scrivi un messaggio…'
+            ? 'Listening…'
+            : 'Type a message…'
         }
         disabled={disabled}
         className="flex-1 bg-transparent outline-none text-sm font-inter py-1.5 min-w-0"
@@ -290,12 +290,12 @@ const PHASE_COLORS = {
 };
 
 const PHASE_LABELS = {
-  idle:       'Tocca il cerchio o SPACE',
-  listening:  'In ascolto…',
-  thinking:   'Elaborando…',
-  speaking:   'Risposta…',
-  proactive:  'In ascolto…',
-  confirming: 'Conferma?',
+  idle:       'Tap orb or press SPACE',
+  listening:  'Listening…',
+  thinking:   'Processing…',
+  speaking:   'Speaking…',
+  proactive:  'Listening…',
+  confirming: 'Confirm?',
 };
 
 // ── Main component ────────────────────────────────────────────────────
@@ -437,7 +437,7 @@ export function VoiceAssistant() {
         }));
         if (rewards.length) triggerRewards(rewards);
         if (result.leveled_up) { setCommitResult(result); setShowLevelUp(true); }
-        speakThenListen('Perfetto, tutto registrato! Posso fare altro per te?');
+        speakThenListen('All done, everything logged. Anything else I can help with?');
         setActiveScript(null);
       }
     } catch { /* ignore */ }
@@ -539,7 +539,7 @@ export function VoiceAssistant() {
         if (command.type === 'rejected') {
           setShowConfirm(false);
           const step = getScriptSteps(activeScript.id, ctx)[activeScript.stepIndex];
-          const q    = step?.buildQuestion(activeScript.collectedData, ctx) ?? 'Riproviamo. Cosa vuoi fare?';
+          const q    = step?.buildQuestion(activeScript.collectedData, ctx) ?? "Let's try again. What would you like to do?";
           addTurn({ role: 'system', text: q, domain: activeScript.domain });
           speakThenListen(q);
           return;
@@ -563,7 +563,7 @@ export function VoiceAssistant() {
         setShowConfirm(true);
         setPhase('confirming');
         const summary = items.map(i => `${i.icon} ${i.label}: ${i.value}`).join(', ');
-        const q = `Ho capito: ${summary}. Confermo?`;
+        const q = `Got it: ${summary}. Shall I confirm?`;
         addTurn({ role: 'confirmation', text: q, items, domain: activeScript.domain });
         speakThenListen(q);
         return;
@@ -591,7 +591,7 @@ export function VoiceAssistant() {
       let fullReply = '';
       for await (const delta of readSseStream(res.body)) { fullReply += delta; }
 
-      const reply = fullReply || 'Scusa, non ho ricevuto risposta.';
+      const reply = fullReply || "Sorry, I didn't get a response. Please try again.";
       historyRef.current = [...historySnapshot, { role: 'user', content: text }, { role: 'assistant', content: reply }];
       addTurn({ role: 'system', text: reply });
       setPhase('speaking');
@@ -624,7 +624,7 @@ export function VoiceAssistant() {
           .catch(() => {});
       }
     } catch {
-      const err = 'Errore di connessione al backend.';
+      const err = 'Connection error. Please try again.';
       addTurn({ role: 'system', text: err });
       speak(err, () => setPhase('idle'));
     }
@@ -788,7 +788,7 @@ export function VoiceAssistant() {
                   onAnimationComplete={() => setTimeout(() => setNavToast(null), 900)}
                 >
                   <span>{navToast.icon}</span>
-                  <span>Navigando su {navToast.label}</span>
+                  <span>Navigating to {navToast.label}</span>
                   <span style={{ opacity: 0.45 }}>↗</span>
                 </motion.div>
               )}
@@ -801,9 +801,9 @@ export function VoiceAssistant() {
                 className="mx-4 mb-2 px-4 py-2 rounded-xl text-xs font-inter text-center flex-shrink-0"
                 style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.28)', color: '#FCA5A5' }}
               >
-                Errore mic: <strong>{recogError}</strong>
-                {recogError === 'not-allowed' && ' — controlla permessi browser'}
-                {recogError === 'network' && ' — richiede connessione internet'}
+                Mic error: <strong>{recogError}</strong>
+                {recogError === 'not-allowed' && ' — check browser permissions'}
+                {recogError === 'network' && ' — requires internet connection'}
               </motion.div>
             )}
 
@@ -897,7 +897,7 @@ export function VoiceAssistant() {
                   onClick={e => e.stopPropagation()}
                 >
                   <p className="font-syne font-black text-sm mb-3" style={{ color: '#E2E8F0' }}>
-                    Ho capito:
+                    Here's what I got:
                   </p>
                   <div className="divide-y divide-white/5">
                     {confirmItems.map((item, i) => <ConfirmRow key={i} item={item} />)}
@@ -908,7 +908,7 @@ export function VoiceAssistant() {
                       className="flex-1 py-2.5 rounded-2xl text-sm font-inter font-bold flex items-center justify-center gap-2"
                       style={{ background: 'linear-gradient(135deg, #3B0D7A, #9333EA)', color: '#fff' }}
                     >
-                      ⚡ Conferma
+                      ⚡ Confirm
                     </button>
                     <button
                       onClick={() => {
@@ -916,14 +916,14 @@ export function VoiceAssistant() {
                         const ctx = buildCtx();
                         if (activeScript) {
                           const step = getScriptSteps(activeScript.id, ctx)[activeScript.stepIndex];
-                          const q    = step?.buildQuestion(activeScript.collectedData, ctx) ?? 'Riproviamo.';
+                          const q    = step?.buildQuestion(activeScript.collectedData, ctx) ?? "Let's try again.";
                           speakThenListen(q);
                         }
                       }}
                       className="px-4 py-2.5 rounded-2xl text-sm font-inter font-semibold"
                       style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(226,232,240,0.7)', border: '1px solid rgba(255,255,255,0.1)' }}
                     >
-                      ↩ Correggi
+                      ↩ Edit
                     </button>
                   </div>
                 </motion.div>

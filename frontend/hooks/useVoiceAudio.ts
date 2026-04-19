@@ -122,7 +122,7 @@ export function useVoiceAudio({
     if (!SR) { setSupported(false); return; }
 
     const r = new SR();
-    r.lang            = navigator.language || 'it-IT';
+    r.lang            = 'en-US';
     r.interimResults  = true;
     r.continuous      = true;
 
@@ -253,20 +253,30 @@ export function useVoiceAudio({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Preferred female English voices in priority order (Apple + Google)
+  const FEMALE_VOICES = ['Samantha', 'Ava', 'Allison', 'Victoria', 'Karen', 'Moira', 'Fiona', 'Tessa', 'Zoe', 'Susan'];
+
   const speak = useCallback((text: string, onEnd?: () => void) => {
     if (!synthRef.current) return;
     synthRef.current.cancel();
-    const utt    = new SpeechSynthesisUtterance(text);
-    utt.lang     = navigator.language || 'it-IT';
-    utt.rate     = 0.95;
-    utt.pitch    = 1.0;
-    const voices = synthRef.current.getVoices();
-    const lang   = navigator.language?.split('-')[0] ?? 'it';
-    const voice  = voices.find(v => v.lang.startsWith(lang))
-                ?? voices.find(v => v.lang.startsWith('en'));
-    if (voice) utt.voice = voice;
+    const utt  = new SpeechSynthesisUtterance(text);
+    utt.lang   = 'en-US';
+    utt.rate   = 1.0;
+    utt.pitch  = 1.05;
+
+    const voices   = synthRef.current.getVoices();
+    const enVoices = voices.filter(v => v.lang.startsWith('en'));
+    // Pick the first preferred female voice available
+    const femaleVoice = FEMALE_VOICES.reduce<SpeechSynthesisVoice | null>(
+      (found, name) => found ?? (enVoices.find(v => v.name.includes(name)) ?? null),
+      null,
+    );
+    const selected = femaleVoice ?? enVoices.find(v => v.default) ?? enVoices[0];
+    if (selected) utt.voice = selected;
+
     utt.onend = () => onEnd?.();
     synthRef.current.speak(utt);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const cancelSpeech = useCallback(() => { synthRef.current?.cancel(); }, []);
