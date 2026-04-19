@@ -8,16 +8,18 @@ import {
   LOW_CORTISOL_TIPS,
 } from '@/lib/gratitude';
 import { useVoiceAudio } from '@/hooks/useVoiceAudio';
-import { useXpFloaterStore, DOMAIN_COLORS } from '@/lib/store';
-import type { TranscriptAnalysisDto, CommitResultDto } from '@/lib/api';
+import { useXpFloaterStore } from '@/lib/store';
+import type { TranscriptAnalysisDto } from '@/lib/api';
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
 const COLOR   = '#FCD34D';
 const MAX_DAY = 3;
 
+// Local date string — avoids UTC offset bugs (e.g. "2026-04-19")
 function todayStr() {
-  return new Date().toISOString().split('T')[0];
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function pickRandom<T>(arr: T[]): T {
@@ -26,12 +28,14 @@ function pickRandom<T>(arr: T[]): T {
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
+// Backend uses snake_case_lower (SnakeCaseLower policy)
 interface GratitudeEntry {
   id: string;
   content: string;
   mood: string | null;
-  createdAt: string;
-  entryDate: string;
+  tags: string[];
+  created_at: string;
+  entry_date: string;   // "YYYY-MM-DD"
 }
 
 type RecordPhase = 'idle' | 'recording' | 'thinking' | 'done';
@@ -73,7 +77,7 @@ function VoiceRecorder({
             content: text,
             source: 'voice',
             tags: ['gratitude', 'voice'],
-            entryDate: todayStr(),
+            entry_date: todayStr(),
           }),
         }),
       ]);
@@ -109,18 +113,20 @@ function VoiceRecorder({
         id: Date.now().toString(),
         content: text,
         mood,
-        createdAt: new Date().toISOString(),
-        entryDate: todayStr(),
+        tags: ['gratitude', 'voice'],
+        created_at: new Date().toISOString(),
+        entry_date: todayStr(),
       };
 
       if (jRes.ok) {
         const data = await jRes.json();
         savedEntry = {
-          id: data.id ?? savedEntry.id,
-          content: data.content ?? text,
-          mood: data.mood ?? mood,
-          createdAt: data.createdAt ?? savedEntry.createdAt,
-          entryDate: data.entryDate ?? todayStr(),
+          id:         data.id         ?? savedEntry.id,
+          content:    data.content    ?? text,
+          mood:       data.mood       ?? mood,
+          tags:       data.tags       ?? savedEntry.tags,
+          created_at: data.created_at ?? savedEntry.created_at,
+          entry_date: data.entry_date ?? todayStr(),
         };
       }
 
@@ -263,7 +269,7 @@ function VoiceRecorder({
 // ── Past entry card ───────────────────────────────────────────────────────
 
 function EntryCard({ entry }: { entry: GratitudeEntry }) {
-  const date = new Date(entry.entryDate + 'T00:00:00');
+  const date = new Date(entry.entry_date + 'T00:00:00');
   return (
     <div
       className="px-4 py-3 rounded-xl"
@@ -311,12 +317,10 @@ export default function GratitudePage() {
     fetch('/api/proxy/journal?limit=100')
       .then(r => r.ok ? r.json() : [])
       .then((entries: GratitudeEntry[]) => {
-        const grat = entries.filter((e: GratitudeEntry & { tags?: string[] }) =>
-          (e as GratitudeEntry & { tags?: string[] }).tags?.includes('gratitude')
-        );
+        const grat = entries.filter(e => e.tags?.includes('gratitude'));
         const today = todayStr();
-        setTodayEntries(grat.filter(e => e.entryDate === today).slice(0, MAX_DAY));
-        setPastEntries(grat.filter(e => e.entryDate !== today).slice(0, 20));
+        setTodayEntries(grat.filter(e => e.entry_date === today).slice(0, MAX_DAY));
+        setPastEntries(grat.filter(e => e.entry_date !== today).slice(0, 20));
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -333,7 +337,7 @@ export default function GratitudePage() {
 
   // Group past entries by date
   const pastByDate = pastEntries.reduce<Record<string, GratitudeEntry[]>>((acc, e) => {
-    (acc[e.entryDate] ??= []).push(e);
+    (acc[e.entry_date] ??= []).push(e);
     return acc;
   }, {});
   const pastDates = Object.keys(pastByDate).sort((a, b) => b.localeCompare(a)).slice(0, 7);
