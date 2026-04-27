@@ -416,28 +416,90 @@ function ImportModal({ interviewId, company, role, onClose, onDone }: {
     setLoadStep(0);
     setError('');
 
-    // Cycle through steps while waiting
     stepTimerRef.current = setInterval(() => {
-      setLoadStep(s => Math.min(s + 1, LOAD_STEPS.length - 1));
-    }, 2200);
+      setLoadStep(s => Math.min(s + 1, LOAD_STEPS.length - 2)); // hold at second-to-last
+    }, 2500);
 
     try {
-      // Use dedicated Next.js route (maxDuration=300) to avoid Vercel proxy timeout
-      const res = await fetch(`/api/import-transcript/${interviewId}`, {
+      // ── Step 1: get Anthropic key from server ──────────────────────────
+      const keyRes = await fetch('/api/anthropic-key');
+      if (!keyRes.ok) { setError('Anthropic API key not configured on server'); return; }
+      const { key } = await keyRes.json() as { key: string };
+
+      // ── Step 2: call Claude directly from browser (no Vercel timeout) ──
+      const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ raw_transcript: raw, company, role }),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 4096,
+          system: 'You are an expert technical interview coach. Extract structured Q&A data from raw transcripts. Respond with valid JSON only — no markdown fences, no explanation.',
+          messages: [{
+            role: 'user',
+            content: `Analyze this interview transcript for a ${role} position at ${company}.
+
+Extract all interviewer question + candidate answer pairs.
+Skip: filler phrases ("Thank you for watching"), audio artifacts, unintelligible fragments.
+
+For each pair return:
+- "question": clean interviewer question
+- "answer": candidate answer, cleaned up
+- "topic": one of Technical | Behavioral | Process | Security | Architecture | Soft Skills | Other
+- "quality_score": integer 1-5 (5=excellent, 1=weak/missing)
+- "ai_feedback": one-sentence improvement tip, or null if strong
+
+Return ONLY a JSON object: {"pairs":[{"question":"...","answer":"...","topic":"...","quality_score":4,"ai_feedback":null}]}
+
+TRANSCRIPT:
+${raw}`,
+          }],
+        }),
       });
-      if (!res.ok) {
-        const body = await res.text();
-        setError(`${body.slice(0, 200)}`);
+
+      if (!claudeRes.ok) {
+        const err = await claudeRes.text();
+        setError(`Claude error ${claudeRes.status}: ${err.slice(0, 150)}`);
         return;
       }
-      const iv = await res.json() as Interview;
+
+      const claudeJson = await claudeRes.json() as { content: { text: string }[] };
+      let rawJson = claudeJson.content[0]?.text?.trim() ?? '{}';
+      if (rawJson.startsWith('```')) {
+        rawJson = rawJson.slice(rawJson.indexOf('\n') + 1);
+        rawJson = rawJson.slice(0, rawJson.lastIndexOf('```')).trim();
+      }
+
+      const parsed = JSON.parse(rawJson) as { pairs?: unknown[] };
+      const pairs = (parsed.pairs ?? []) as Array<{
+        question: string; answer: string; topic: string | null;
+        quality_score: number | null; ai_feedback: string | null;
+      }>;
+
+      if (pairs.length === 0) { setError('No Q&A pairs found — try a cleaner transcript'); return; }
+
+      // ── Step 3: save to backend (fast, no Claude call) ─────────────────
+      setLoadStep(LOAD_STEPS.length - 1);
+      const saveRes = await fetch(`/api/proxy/career/interviews/${interviewId}/qa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pairs }),
+      });
+
+      if (!saveRes.ok) {
+        const err = await saveRes.text();
+        setError(`Save error ${saveRes.status}: ${err.slice(0, 150)}`);
+        return;
+      }
+
+      const iv = await saveRes.json() as Interview;
       onDone(iv);
       onClose();
     } catch (e) {
-      setError(`Network error: ${e}`);
+      setError(`Error: ${e}`);
     } finally {
       if (stepTimerRef.current) clearInterval(stepTimerRef.current);
       setLoading(false);
