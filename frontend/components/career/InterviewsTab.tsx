@@ -277,7 +277,7 @@ function NewInterviewModal({ onClose, onCreate }: {
     if (res.ok) {
       const iv = await res.json() as Interview;
       onCreate(iv);
-      onClose();
+      // parent handles closing + opening import modal
     }
     setLoading(false);
   }
@@ -509,6 +509,8 @@ export function InterviewsTab() {
 
   function handleCreate(iv: Interview) {
     setInterviews(prev => [iv, ...prev]);
+    setShowNew(false);
+    setImportId(iv.id);  // auto-open import modal after creation
   }
 
   function handleImportDone(updated: Interview) {
