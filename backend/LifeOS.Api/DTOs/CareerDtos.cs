@@ -1,5 +1,13 @@
 namespace LifeOS.Api.DTOs;
 
+public record InterviewQaParsed(
+    string Question,
+    string Answer,
+    string? Topic,
+    int? QualityScore,
+    string? AiFeedback
+);
+
 public record GoalDto(
     Guid Id,
     Guid DomainId,

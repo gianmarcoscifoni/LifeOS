@@ -296,6 +296,65 @@ public class ClaudeService(
             [.. rewardsGranted]);
     }
 
+    public async Task<List<InterviewQaParsed>> ParseInterviewTranscript(string transcript, string company, string role)
+    {
+        var body = new
+        {
+            model      = Model,
+            max_tokens = 4096,
+            system     = "You are an expert technical interview coach. Extract structured Q&A data from raw transcripts. Always respond with valid JSON only — no markdown, no explanation.",
+            messages   = new[]
+            {
+                new
+                {
+                    role    = "user",
+                    content = $"""
+                        Analyze this interview transcript for a {role} position at {company}.
+
+                        Extract all interviewer question + candidate answer pairs.
+                        Skip: filler phrases ("Thank you for watching"), audio artifacts, unintelligible fragments, off-topic chatter.
+
+                        For each pair return:
+                        - "question": clean interviewer question
+                        - "answer": candidate's answer, cleaned up
+                        - "topic": one of Technical | Behavioral | Process | Security | Architecture | Soft Skills | Other
+                        - "quality_score": integer 1-5 (5=excellent, 1=weak/missing)
+                        - "ai_feedback": one-sentence improvement tip, or null if the answer was strong
+
+                        Return ONLY valid JSON with a "pairs" array, no markdown.
+
+                        TRANSCRIPT:
+                        {transcript}
+                        """,
+                },
+            },
+        };
+
+        var response = await SendRequest(body);
+        var json     = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        var raw = doc.RootElement
+            .GetProperty("content")[0]
+            .GetProperty("text")
+            .GetString() ?? "{}";
+
+        var cleaned = raw.Trim();
+        if (cleaned.StartsWith("```"))
+        {
+            cleaned = cleaned[(cleaned.IndexOf('\n') + 1)..];
+            cleaned = cleaned[..cleaned.LastIndexOf("```")].Trim();
+        }
+
+        using var parsed = JsonDocument.Parse(cleaned);
+        var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        return parsed.RootElement
+            .GetProperty("pairs")
+            .EnumerateArray()
+            .Select(el => JsonSerializer.Deserialize<InterviewQaParsed>(el.GetRawText(), opts)!)
+            .Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Question))
+            .ToList();
+    }
+
     private object BuildRequestBody(string question, string context, bool stream, List<MessageDto>? history = null)
     {
         var messages = new List<object>();

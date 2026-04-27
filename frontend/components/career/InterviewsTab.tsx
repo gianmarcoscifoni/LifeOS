@@ -382,12 +382,23 @@ function ImportModal({ interviewId, onClose, onDone }: {
   onClose: () => void;
   onDone: (iv: Interview) => void;
 }) {
-  const [dragging, setDragging] = useState(false);
-  const [file, setFile]         = useState<File | null>(null);
-  const [text, setText]         = useState('');
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState('');
-  const inputRef                = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging]   = useState(false);
+  const [file, setFile]           = useState<File | null>(null);
+  const [text, setText]           = useState('');
+  const [loading, setLoading]     = useState(false);
+  const [loadStep, setLoadStep]   = useState(0);
+  const [error, setError]         = useState('');
+  const inputRef                  = useRef<HTMLInputElement>(null);
+  const stepTimerRef              = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const LOAD_STEPS = [
+    'Reading transcript…',
+    'Identifying Q&A pairs…',
+    'Classifying topics…',
+    'Scoring answers…',
+    'Generating feedback…',
+    'Saving to LifeOS…',
+  ];
 
   async function handleFile(f: File) {
     setFile(f);
@@ -400,20 +411,32 @@ function ImportModal({ interviewId, onClose, onDone }: {
     const raw = text.trim();
     if (!raw) return;
     setLoading(true);
+    setLoadStep(0);
     setError('');
+
+    // Cycle through steps while waiting
+    stepTimerRef.current = setInterval(() => {
+      setLoadStep(s => Math.min(s + 1, LOAD_STEPS.length - 1));
+    }, 2200);
+
     try {
       const res = await fetch(`/api/proxy/career/interviews/${interviewId}/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ raw_transcript: raw }),
       });
-      if (!res.ok) { setError('Import failed — check API key'); return; }
+      if (!res.ok) {
+        const body = await res.text();
+        setError(`${body.slice(0, 200)}`);
+        return;
+      }
       const iv = await res.json() as Interview;
       onDone(iv);
       onClose();
-    } catch {
-      setError('Network error');
+    } catch (e) {
+      setError(`Network error: ${e}`);
     } finally {
+      if (stepTimerRef.current) clearInterval(stepTimerRef.current);
       setLoading(false);
     }
   }
@@ -483,16 +506,73 @@ function ImportModal({ interviewId, onClose, onDone }: {
           <p className="text-xs font-inter" style={{ color: '#EF4444' }}>{error}</p>
         )}
 
-        <button
-          onClick={doImport}
-          disabled={loading || !text.trim()}
-          className="w-full py-3 rounded-2xl font-syne font-bold text-sm transition-all active:scale-95 disabled:opacity-40 flex items-center justify-center gap-2"
-          style={{ background: 'rgba(192,132,252,0.2)', border: '1.5px solid rgba(192,132,252,0.4)', color: '#C084FC' }}
-        >
-          {loading
-            ? <><Loader2 size={15} className="animate-spin" /> Analyzing with Claude…</>
-            : <><Upload size={14} /> Extract Q&As</>}
-        </button>
+        <AnimatePresence mode="wait">
+          {loading ? (
+            <motion.div
+              key="loader"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              className="rounded-2xl p-4 space-y-3"
+              style={{ background: 'rgba(192,132,252,0.06)', border: '1.5px solid rgba(192,132,252,0.2)' }}
+            >
+              {/* Progress bar */}
+              <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
+                <motion.div
+                  className="h-full rounded-full"
+                  style={{ background: 'linear-gradient(90deg, #7C3AED, #C084FC)' }}
+                  animate={{ width: `${((loadStep + 1) / LOAD_STEPS.length) * 100}%` }}
+                  transition={{ duration: 0.6, ease: 'easeOut' }}
+                />
+              </div>
+
+              {/* Step label */}
+              <div className="flex items-center gap-2">
+                <Loader2 size={13} className="animate-spin flex-shrink-0" style={{ color: '#C084FC' }} />
+                <AnimatePresence mode="wait">
+                  <motion.p
+                    key={loadStep}
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    className="text-xs font-inter font-medium"
+                    style={{ color: '#C084FC' }}
+                  >
+                    {LOAD_STEPS[loadStep]}
+                  </motion.p>
+                </AnimatePresence>
+              </div>
+
+              {/* Step dots */}
+              <div className="flex items-center gap-1.5">
+                {LOAD_STEPS.map((_, i) => (
+                  <motion.div
+                    key={i}
+                    className="h-1 flex-1 rounded-full"
+                    animate={{
+                      background: i <= loadStep
+                        ? 'rgba(192,132,252,0.7)'
+                        : 'rgba(255,255,255,0.08)',
+                    }}
+                    transition={{ duration: 0.3 }}
+                  />
+                ))}
+              </div>
+            </motion.div>
+          ) : (
+            <motion.button
+              key="btn"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              onClick={doImport}
+              disabled={!text.trim()}
+              className="w-full py-3 rounded-2xl font-syne font-bold text-sm transition-all active:scale-95 disabled:opacity-40 flex items-center justify-center gap-2"
+              style={{ background: 'rgba(192,132,252,0.2)', border: '1.5px solid rgba(192,132,252,0.4)', color: '#C084FC' }}
+            >
+              <Upload size={14} /> Extract Q&As with Claude
+            </motion.button>
+          )}
+        </AnimatePresence>
       </motion.div>
     </div>
   );
