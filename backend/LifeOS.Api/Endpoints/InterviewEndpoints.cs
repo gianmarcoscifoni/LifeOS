@@ -74,7 +74,42 @@ public static class InterviewEndpoints
             return Results.NoContent();
         }).WithName("DeleteInterview");
 
-        // ── Import transcript → Claude → Q&A pairs ───────────────────────
+        // ── Save pre-parsed Q&A (called by Next.js route after Claude) ──────
+        group.MapPost("/{id:guid}/qa", async (
+            Guid id,
+            SaveQARequest req,
+            LifeOsDbContext db) =>
+        {
+            var iv = await db.Interviews.FindAsync(id);
+            if (iv is null) return Results.NotFound();
+
+            var old = db.InterviewQAs.Where(q => q.InterviewId == id);
+            db.InterviewQAs.RemoveRange(old);
+
+            var qaList = req.Pairs.Select((p, idx) => new InterviewQA
+            {
+                Id           = Guid.NewGuid(),
+                InterviewId  = id,
+                Question     = p.Question,
+                Answer       = p.Answer,
+                Topic        = p.Topic,
+                QualityScore = p.QualityScore,
+                AiFeedback   = p.AiFeedback,
+                SortOrder    = idx,
+            }).ToList();
+
+            db.InterviewQAs.AddRange(qaList);
+            iv.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+
+            var updated = await db.Interviews
+                .Include(x => x.QaPairs.OrderBy(q => q.SortOrder))
+                .FirstAsync(x => x.Id == id);
+
+            return Results.Ok(ToDto(updated));
+        }).WithName("SaveQAPairs");
+
+        // ── Import transcript → Claude → Q&A pairs (legacy/direct) ──────────
         group.MapPost("/{id:guid}/import", async (
             Guid id,
             ImportTranscriptRequest req,
@@ -155,3 +190,12 @@ public record UpdateInterviewRequest(
     string? Notes);
 
 public record ImportTranscriptRequest(string RawTranscript);
+
+public record SaveQAPairItem(
+    string Question,
+    string Answer,
+    string? Topic,
+    int? QualityScore,
+    string? AiFeedback);
+
+public record SaveQARequest(List<SaveQAPairItem> Pairs);

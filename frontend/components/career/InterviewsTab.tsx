@@ -152,7 +152,7 @@ function QACard({ qa, index }: { qa: QAPair; index: number }) {
 function InterviewCard({ iv, onDelete, onImport }: {
   iv: Interview;
   onDelete: (id: string) => void;
-  onImport: (id: string) => void;
+  onImport: (iv: Interview) => void;
 }) {
   const [open, setOpen] = useState(false);
   const cfg = STATUS_CFG[iv.status] ?? STATUS_CFG.scheduled;
@@ -206,7 +206,7 @@ function InterviewCard({ iv, onDelete, onImport }: {
 
         <div className="flex items-center gap-1.5">
           <button
-            onClick={() => onImport(iv.id)}
+            onClick={() => onImport(iv)}
             className="p-2 rounded-xl transition-all active:scale-90"
             style={{ background: 'rgba(192,132,252,0.1)', border: '1px solid rgba(192,132,252,0.2)' }}
             title="Import transcript"
@@ -377,8 +377,10 @@ function NewInterviewModal({ onClose, onCreate }: {
 
 // ── Import Modal ──────────────────────────────────────────────────────────
 
-function ImportModal({ interviewId, onClose, onDone }: {
+function ImportModal({ interviewId, company, role, onClose, onDone }: {
   interviewId: string;
+  company: string;
+  role: string;
   onClose: () => void;
   onDone: (iv: Interview) => void;
 }) {
@@ -420,10 +422,11 @@ function ImportModal({ interviewId, onClose, onDone }: {
     }, 2200);
 
     try {
-      const res = await fetch(`/api/proxy/career/interviews/${interviewId}/import`, {
+      // Use dedicated Next.js route (maxDuration=300) to avoid Vercel proxy timeout
+      const res = await fetch(`/api/import-transcript/${interviewId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ raw_transcript: raw }),
+        body: JSON.stringify({ raw_transcript: raw, company, role }),
       });
       if (!res.ok) {
         const body = await res.text();
@@ -584,7 +587,7 @@ export function InterviewsTab() {
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [loading, setLoading]       = useState(true);
   const [showNew, setShowNew]       = useState(false);
-  const [importId, setImportId]     = useState<string | null>(null);
+  const [importTarget, setImportTarget] = useState<Interview | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -603,7 +606,7 @@ export function InterviewsTab() {
   function handleCreate(iv: Interview) {
     setInterviews(prev => [iv, ...prev]);
     setShowNew(false);
-    setImportId(iv.id);  // auto-open import modal after creation
+    setImportTarget(iv);  // auto-open import modal after creation
   }
 
   function handleImportDone(updated: Interview) {
@@ -663,7 +666,7 @@ export function InterviewsTab() {
               key={iv.id}
               iv={iv}
               onDelete={handleDelete}
-              onImport={id => setImportId(id)}
+              onImport={iv => setImportTarget(iv)}
             />
           ))}
         </div>
@@ -673,11 +676,13 @@ export function InterviewsTab() {
       {showNew && (
         <NewInterviewModal onClose={() => setShowNew(false)} onCreate={handleCreate} />
       )}
-      {importId && (
+      {importTarget && (
         <ImportModal
-          interviewId={importId}
-          onClose={() => setImportId(null)}
-          onDone={updated => { handleImportDone(updated); setImportId(null); }}
+          interviewId={importTarget.id}
+          company={importTarget.company}
+          role={importTarget.role}
+          onClose={() => setImportTarget(null)}
+          onDone={updated => { handleImportDone(updated); setImportTarget(null); }}
         />
       )}
     </div>
