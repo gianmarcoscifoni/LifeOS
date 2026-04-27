@@ -35,6 +35,8 @@ public class LifeOsDbContext(DbContextOptions<LifeOsDbContext> options) : DbCont
     public DbSet<PlatformMetrics> PlatformMetrics => Set<PlatformMetrics>();
     public DbSet<ContentQueue> ContentQueue => Set<ContentQueue>();
     public DbSet<Achievement> Achievements => Set<Achievement>();
+    public DbSet<Interview> Interviews => Set<Interview>();
+    public DbSet<InterviewQA> InterviewQAs => Set<InterviewQA>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -281,6 +283,22 @@ public class LifeOsDbContext(DbContextOptions<LifeOsDbContext> options) : DbCont
             e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
             e.HasOne(x => x.Profile).WithMany(p => p.Achievements).HasForeignKey(x => x.ProfileId);
             e.HasOne(x => x.Tree).WithMany(t => t.Achievements).HasForeignKey(x => x.TreeId);
+        });
+
+        // ── Interview ────────────────────────────────────────────────────
+        mb.Entity<Interview>(e =>
+        {
+            e.Property(x => x.Status).HasDefaultValue("scheduled");
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        // ── InterviewQA ──────────────────────────────────────────────────
+        mb.Entity<InterviewQA>(e =>
+        {
+            e.Property(x => x.SortOrder).HasDefaultValue(0);
+            e.HasOne(x => x.Interview).WithMany(i => i.QaPairs)
+                .HasForeignKey(x => x.InterviewId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

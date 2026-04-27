@@ -3,10 +3,11 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Briefcase, Activity, DollarSign,
-  Zap, FileText, BookOpen, Bot, Heart, Star,
+  Zap, FileText, BookOpen, Bot, Heart, Star, Mail, LogIn, LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
+import { useSession, signIn, signOut } from 'next-auth/react';
 
 const navItems = [
   { href: '/',           label: 'Dashboard',      icon: LayoutDashboard },
@@ -19,7 +20,62 @@ const navItems = [
   { href: '/career',     label: 'Career',         icon: Briefcase },
   { href: '/journal',    label: 'Journal',        icon: BookOpen },
   { href: '/claude',     label: 'Ask Claude',     icon: Bot },
+  { href: '/gmail',      label: 'Inbox Intel',    icon: Mail },
 ];
+
+function UserRow() {
+  const { data: session, status } = useSession();
+
+  if (status === 'loading') return null;
+
+  if (!session) {
+    return (
+      <button
+        onClick={() => signIn('google')}
+        className="flex items-center gap-2 w-full px-3 py-2 rounded-xl transition-colors hover:bg-white/5"
+        style={{ color: 'rgba(226,232,240,0.35)' }}
+      >
+        <LogIn size={14} />
+        <span className="font-inter text-xs">Sign in with Google</span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2.5 px-2 py-1.5">
+      {session.user?.image ? (
+        <img
+          src={session.user.image}
+          alt={session.user.name ?? ''}
+          className="w-7 h-7 rounded-full flex-shrink-0"
+          style={{ border: '1.5px solid rgba(147,51,234,0.4)' }}
+        />
+      ) : (
+        <div
+          className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+          style={{ background: 'rgba(147,51,234,0.2)', color: '#9333EA' }}
+        >
+          {session.user?.name?.[0]?.toUpperCase() ?? 'G'}
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <p className="font-inter text-[11px] font-medium truncate" style={{ color: 'rgba(226,232,240,0.7)' }}>
+          {session.user?.name ?? 'User'}
+        </p>
+        <p className="font-inter text-[10px] truncate" style={{ color: 'rgba(226,232,240,0.25)' }}>
+          Gmail connected
+        </p>
+      </div>
+      <button
+        onClick={() => signOut()}
+        className="p-1 rounded-lg transition-colors hover:bg-white/5"
+        title="Sign out"
+      >
+        <LogOut size={12} style={{ color: 'rgba(226,232,240,0.25)' }} />
+      </button>
+    </div>
+  );
+}
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -109,8 +165,9 @@ export function Sidebar() {
         })}
       </div>
 
-      {/* Bottom hint */}
-      <div className="px-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+      {/* Bottom: user + voice hint */}
+      <div className="px-3 pt-3 space-y-3" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        <UserRow />
         <p className="font-inter text-[10px] text-center" style={{ color: 'rgba(226,232,240,0.2)', letterSpacing: '0.08em' }}>
           HOLD SPACE → VOICE MODE
         </p>

@@ -1,19 +1,21 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, Circle, Target, CalendarDays, ListTodo, Trophy } from 'lucide-react';
+import { CheckCircle2, Circle, Target, CalendarDays, ListTodo, Trophy, Mic } from 'lucide-react';
 import { DailyView } from '@/components/goals/DailyView';
 import { GoalTimeline } from '@/components/goals/GoalTimeline';
 import { Top10Goals } from '@/components/goals/Top10Goals';
 import { PageVoiceEntry } from '@/components/voice/PageVoiceEntry';
+import { InterviewsTab } from '@/components/career/InterviewsTab';
 
-type CareerTab = 'daily' | 'goals' | 'timeline' | 'top10';
+type CareerTab = 'daily' | 'goals' | 'timeline' | 'top10' | 'interviews';
 
 const TAB_CONFIG: { id: CareerTab; label: string; icon: React.ReactNode }[] = [
-  { id: 'daily',    label: 'Oggi',      icon: <ListTodo size={13} /> },
-  { id: 'goals',    label: 'Goals',     icon: <Target size={13} /> },
-  { id: 'timeline', label: 'Timeline',  icon: <CalendarDays size={13} /> },
-  { id: 'top10',    label: 'Top 10',    icon: <Trophy size={13} /> },
+  { id: 'daily',      label: 'Oggi',        icon: <ListTodo size={13} /> },
+  { id: 'goals',      label: 'Goals',       icon: <Target size={13} /> },
+  { id: 'timeline',   label: 'Timeline',    icon: <CalendarDays size={13} /> },
+  { id: 'top10',      label: 'Top 10',      icon: <Trophy size={13} /> },
+  { id: 'interviews', label: 'Interviews',  icon: <Mic size={13} /> },
 ];
 
 interface Milestone { id: string; title: string; isCompleted: boolean; dueDate?: string }
@@ -183,10 +185,11 @@ export default function CareerPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.18 }}
       >
-        {tab === 'daily'    && <DailyView />}
-        {tab === 'goals'    && <GoalsTab />}
-        {tab === 'timeline' && <GoalTimeline />}
-        {tab === 'top10'    && <Top10Goals year={new Date().getFullYear()} />}
+        {tab === 'daily'      && <DailyView />}
+        {tab === 'goals'      && <GoalsTab />}
+        {tab === 'timeline'   && <GoalTimeline />}
+        {tab === 'top10'      && <Top10Goals year={new Date().getFullYear()} />}
+        {tab === 'interviews' && <InterviewsTab />}
       </motion.div>
     </div>
   );

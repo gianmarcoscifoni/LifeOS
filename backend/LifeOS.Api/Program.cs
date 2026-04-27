@@ -66,6 +66,7 @@ try
     // ── Endpoints ─────────────────────────────────────────────────────────
     app.MapBrandEndpoints();
     app.MapCareerEndpoints();
+    app.MapInterviewEndpoints();
     app.MapHabitEndpoints();
     app.MapFinanceEndpoints();
     app.MapContentEndpoints();
