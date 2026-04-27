@@ -53,6 +53,13 @@ try
 
     var app = builder.Build();
 
+    // ── Auto-migrate on startup ───────────────────────────────────────────
+    using (var scope = app.Services.CreateScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<LifeOS.Api.Data.LifeOsDbContext>();
+        db.Database.Migrate();
+    }
+
     // ── Middleware ────────────────────────────────────────────────────────
     app.UseSerilogRequestLogging();
     app.UseCors("frontend");

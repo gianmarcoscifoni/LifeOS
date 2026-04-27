@@ -265,21 +265,30 @@ function NewInterviewModal({ onClose, onCreate }: {
   const [date, setDate]       = useState(new Date().toISOString().split('T')[0]);
   const [status, setStatus]   = useState('scheduled');
   const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
 
   async function submit() {
     if (!company.trim() || !role.trim()) return;
     setLoading(true);
-    const res = await fetch('/api/proxy/career/interviews', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ company: company.trim(), role: role.trim(), date, status }),
-    });
-    if (res.ok) {
-      const iv = await res.json() as Interview;
-      onCreate(iv);
-      // parent handles closing + opening import modal
+    setError('');
+    try {
+      const res = await fetch('/api/proxy/career/interviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company: company.trim(), role: role.trim(), date, status }),
+      });
+      if (res.ok) {
+        const iv = await res.json() as Interview;
+        onCreate(iv);
+      } else {
+        const body = await res.text();
+        setError(`Server error ${res.status}: ${body.slice(0, 120)}`);
+      }
+    } catch (e) {
+      setError(`Network error: ${e}`);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (
@@ -348,6 +357,10 @@ function NewInterviewModal({ onClose, onCreate }: {
             </select>
           </div>
         </div>
+
+        {error && (
+          <p className="text-xs font-inter px-1" style={{ color: '#EF4444' }}>{error}</p>
+        )}
 
         <button
           onClick={submit}
