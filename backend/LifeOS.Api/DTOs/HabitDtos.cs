@@ -20,9 +20,9 @@ public record HabitLogDto(
 );
 
 public record CreateHabitRequest(
-    Guid DomainId,
     string Name,
     string Frequency = "daily",
+    Guid? DomainId = null,
     Guid? GoalId = null
 );
 

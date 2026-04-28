@@ -3,7 +3,11 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Check } from 'lucide-react';
 
-export function HabitCheckIn({ habitId, completedToday }: { habitId: string; completedToday: boolean }) {
+export function HabitCheckIn({ habitId, completedToday, onCheckedIn }: {
+  habitId: string;
+  completedToday: boolean;
+  onCheckedIn?: () => void;
+}) {
   const [done, setDone] = useState(completedToday);
   const [loading, setLoading] = useState(false);
   const [burst, setBurst] = useState(false);
@@ -12,10 +16,17 @@ export function HabitCheckIn({ habitId, completedToday }: { habitId: string; com
     if (done || loading) return;
     setLoading(true);
     try {
-      await fetch(`/api/proxy/habits/${habitId}/log`, { method: 'POST' });
-      setDone(true);
-      setBurst(true);
-      setTimeout(() => setBurst(false), 600);
+      const res = await fetch(`/api/proxy/habits/${habitId}/log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completed: true }),
+      });
+      if (res.ok) {
+        setDone(true);
+        setBurst(true);
+        setTimeout(() => setBurst(false), 600);
+        onCheckedIn?.();
+      }
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }

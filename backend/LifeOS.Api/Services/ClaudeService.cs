@@ -56,7 +56,7 @@ public class ClaudeService(
     public async Task<string> GenerateWeeklyReview()
     {
         var summary = await BuildWeeklySummary();
-        var review = await Ask($"Genera la mia review settimanale basata su questi dati: {summary}");
+        var review = await Ask($"Generate my weekly review based on this data: {summary}");
 
         // Persist as journal entry
         db.JournalEntries.Add(new JournalEntry
@@ -81,32 +81,32 @@ public class ClaudeService(
             model = Model,
             max_tokens = 1200,
             stream = false,
-            system = "Sei un analizzatore di testo. Rispondi SOLO con JSON valido, nessun testo extra, nessun markdown.",
+            system = "You are a text analyzer. Respond ONLY with valid JSON, no extra text, no markdown.",
             messages = new[]
             {
                 new
                 {
                     role = "user",
                     content = $$"""
-                        Analizza questa trascrizione vocale. Rispondi SOLO con questo JSON (nessun testo aggiuntivo, nessun markdown):
+                        Analyze this voice transcript. Respond ONLY with this JSON (no additional text, no markdown):
                         {
-                          "keywords": ["parola1", "parola2"],
+                          "keywords": ["word1", "word2"],
                           "topics": [{"text":"...","area":"career|habits|finance|health|brand","icon":"emoji","confidence":0.9}],
-                          "goals": [{"title":"...","area":"career","priority":"high|medium|low","due_hint":"questa settimana|questo mese|null"}],
+                          "goals": [{"title":"...","area":"career","priority":"high|medium|low","due_hint":"this week|this month|null"}],
                           "mood": "great|good|neutral|low|terrible",
-                          "gratitude": ["cosa1"],
-                          "coaching_message": "Una frase motivazionale in italiano, max 2 frasi.",
-                          "expenses": [{"description":"caffè","amount":3.50,"category":"food|transport|entertainment|health|other"}],
+                          "gratitude": ["item1"],
+                          "coaching_message": "A motivational sentence in English, max 2 sentences.",
+                          "expenses": [{"description":"coffee","amount":3.50,"category":"food|transport|entertainment|health|other"}],
                           "content_ideas": [{"title":"...","platform":"LinkedIn|Instagram|YouTube|GitHub","format":"post|article|reel|carousel|video"}],
-                          "habit_mentions": [{"name":"palestra","completed":true}],
+                          "habit_mentions": [{"name":"gym","completed":true}],
                           "xp_rewards": [{"action":"Publish LinkedIn post","xp":50,"icon":"💼","area":"brand"}]
                         }
-                        Regole per xp_rewards — usa SOLO queste azioni con questi XP esatti:
+                        Rules for xp_rewards — use ONLY these actions with these exact XP:
                         "Publish LinkedIn post"=50, "Publish LinkedIn article"=150, "Publish Medium article"=200,
                         "Instagram carousel"=75, "Instagram reel"=100, "GitHub open source commit"=30,
                         "Conference talk"=500, "Land a client"=1000, "Certification earned"=750,
                         "Networking event attended"=100, "1-on-1 coffee with contact"=50, "30-day habit streak"=200.
-                        Trascrizione: {{transcript}}
+                        Transcript: {{transcript}}
                         """,
                 },
             },
@@ -372,6 +372,7 @@ public class ClaudeService(
                 You are FRIDAY, Gianmarco's personal AI assistant — female voice, sharp and witty like a female Tony Stark.
                 Tone: direct, concrete, slightly sarcastic — never verbose. Max 3 sentences unless more is truly needed.
                 You know everything about Gianmarco's life through his LifeOS data below.
+                CRITICAL: Always respond in English, regardless of what language the user writes in.
 
                 LifeOS context:
                 {context}

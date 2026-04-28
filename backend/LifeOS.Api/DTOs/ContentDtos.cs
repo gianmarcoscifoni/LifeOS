@@ -19,8 +19,8 @@ public record ContentQueueDto(
 );
 
 public record CreateContentRequest(
-    Guid PlatformId,
     string Title,
+    Guid? PlatformId = null,
     string? Draft = null,
     Guid? PillarId = null,
     Guid? TreeId = null,

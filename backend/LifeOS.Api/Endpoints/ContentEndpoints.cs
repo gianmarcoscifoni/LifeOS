@@ -38,9 +38,13 @@ public static class ContentEndpoints
             [ProducesResponseType<ContentQueueDto>(201)]
             async (CreateContentRequest req, LifeOsDbContext db) =>
             {
+                var platformId = req.PlatformId
+                    ?? (await db.Platforms.OrderBy(p => p.Priority).Select(p => p.Id).FirstOrDefaultAsync());
+                if (platformId == Guid.Empty)
+                    return Results.BadRequest("No platforms available — seed the database.");
                 var item = new ContentQueue
                 {
-                    PlatformId   = req.PlatformId,
+                    PlatformId   = platformId,
                     Title        = req.Title,
                     Draft        = req.Draft,
                     PillarId     = req.PillarId,
@@ -108,6 +112,17 @@ public static class ContentEndpoints
                 return Results.Ok(ToDto(item));
             })
             .WithName("PublishContent");
+
+        /// Returns available platforms for content creation.
+        group.MapGet("/platforms", async (LifeOsDbContext db) =>
+        {
+            var platforms = await db.Platforms
+                .Where(p => p.Status == "active")
+                .OrderBy(p => p.Priority)
+                .Select(p => new { p.Id, p.Name })
+                .ToListAsync();
+            return Results.Ok(platforms);
+        }).WithName("GetContentPlatforms");
 
         /// <summary>
         /// Restituisce tutti i pilastri editoriali del brand.

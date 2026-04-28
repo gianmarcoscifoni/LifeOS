@@ -31,9 +31,13 @@ public static class HabitEndpoints
             [ProducesResponseType<HabitDto>(201)]
             async (CreateHabitRequest req, LifeOsDbContext db) =>
             {
+                var domainId = req.DomainId
+                    ?? (await db.LifeDomains.OrderBy(d => d.Name).Select(d => d.Id).FirstOrDefaultAsync());
+                if (domainId == Guid.Empty)
+                    return Results.BadRequest("No life domains found — seed the database.");
                 var h = new Habit
                 {
-                    DomainId  = req.DomainId,
+                    DomainId  = domainId,
                     GoalId    = req.GoalId,
                     Name      = req.Name,
                     Frequency = req.Frequency,
@@ -77,6 +81,28 @@ public static class HabitEndpoints
                 return Results.Ok(new HabitLogDto(existing.Id, existing.HabitId, existing.LoggedDate, existing.Completed, existing.Notes));
             })
             .WithName("LogHabit");
+
+        /// Returns all habit logs from the last N days (default 90) for all habits.
+        group.MapGet("/logs/recent", async (LifeOsDbContext db, int? days) =>
+        {
+            var since = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-(days ?? 90));
+            var logs  = await db.HabitLogs
+                .Where(l => l.LoggedDate >= since)
+                .Select(l => new { l.HabitId, l.LoggedDate, l.Completed })
+                .OrderByDescending(l => l.LoggedDate)
+                .ToListAsync();
+            return Results.Ok(logs);
+        }).WithName("GetRecentHabitLogs");
+
+        /// Returns available life domains (used when creating a new habit).
+        group.MapGet("/domains", async (LifeOsDbContext db) =>
+        {
+            var domains = await db.LifeDomains
+                .Select(d => new { d.Id, d.Name })
+                .OrderBy(d => d.Name)
+                .ToListAsync();
+            return Results.Ok(domains);
+        }).WithName("GetHabitDomains");
 
         /// <summary>
         /// Restituisce la streak corrente e migliore di un'abitudine.
