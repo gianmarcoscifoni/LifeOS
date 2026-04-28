@@ -46,11 +46,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen text-foreground font-inter antialiased" style={{ backgroundColor: '#0A0415' }}>
         <Providers>
           <NebulaBackground />
+          <Sidebar />
           <div className="flex min-h-screen">
-            <aside className="hidden lg:flex lg:w-64 lg:flex-shrink-0">
-              <Sidebar />
-            </aside>
-            <main className="flex-1 overflow-auto pb-16 lg:pb-0">
+            <main className="flex-1 overflow-auto pb-16">
               {children}
             </main>
           </div>

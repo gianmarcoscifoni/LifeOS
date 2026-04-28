@@ -34,10 +34,37 @@ export default function BrandPage() {
       fetch('/api/proxy/brand/profile').then(r => r.ok ? r.json() : null).catch(() => null),
       fetch('/api/proxy/brand/skill-trees').then(r => r.ok ? r.json() : []).catch(() => []),
       fetch('/api/proxy/brand/achievements').then(r => r.ok ? r.json() : []).catch(() => []),
-    ]).then(([p, s, a]) => {
-      setProfile(p);
+    ]).then(([raw, s, a]) => {
+      if (raw) {
+        // Backend uses SnakeCaseLower — normalise to camelCase
+        const level = raw.global_level ?? raw.globalLevel ?? 1;
+        const totalXp = raw.total_xp ?? raw.totalXp ?? 0;
+        const xpToNextLevel = raw.xp_to_next_level ?? raw.xpToNextLevel ?? 1000;
+        // currentLevelXp not in DTO — approximate from totalXp mod threshold
+        const currentLevelXp = raw.current_level_xp ?? raw.currentLevelXp ?? (totalXp % xpToNextLevel);
+        const stats = (raw.stats ?? []).map((s: Record<string, unknown>) => ({
+          name: (s.stat_name ?? s.statName ?? s.name ?? '') as string,
+          value: (s.current_value ?? s.currentValue ?? s.value ?? 0) as number,
+        }));
+        setProfile({
+          codename: raw.codename ?? '—',
+          title: raw.title ?? '—',
+          level,
+          tier: raw.tier ?? 'bronze',
+          totalXp,
+          currentLevelXp,
+          xpToNextLevel,
+          stats,
+        });
+      }
       setSkillTrees(s ?? []);
-      setAchievements(a ?? []);
+      setAchievements((a ?? []).map((x: Record<string, unknown>) => ({
+        id: x.id as string,
+        name: (x.name ?? '') as string,
+        description: (x.description ?? '') as string,
+        isUnlocked: (x.unlocked ?? x.isUnlocked ?? false) as boolean,
+        xpReward: (x.xp_reward ?? x.xpReward ?? 0) as number,
+      })));
     });
   }, []);
 

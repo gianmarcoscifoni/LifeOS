@@ -79,8 +79,11 @@ export function DashboardClient({ data }: { data: DashboardOverview | null }) {
         className="flex items-center justify-between"
       >
         <div>
-          <p className="text-sm font-inter" style={{ color: 'rgba(226,232,240,0.4)' }}>
-            {data ? data.brand.codename : 'sovereign_engineer'} ✦ Digital Aura
+          <p className="text-lg font-syne font-bold" style={{ color: 'rgba(226,232,240,0.85)' }}>
+            LifeOS
+          </p>
+          <p className="text-xs font-inter mt-0.5" style={{ color: 'rgba(226,232,240,0.35)' }}>
+            {new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
 
