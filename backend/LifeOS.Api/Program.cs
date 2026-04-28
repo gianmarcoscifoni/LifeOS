@@ -74,6 +74,7 @@ try
     app.MapBrandEndpoints();
     app.MapCareerEndpoints();
     app.MapInterviewEndpoints();
+    app.MapStreakEndpoints();
     app.MapHabitEndpoints();
     app.MapFinanceEndpoints();
     app.MapContentEndpoints();

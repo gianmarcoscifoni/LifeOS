@@ -37,6 +37,7 @@ public class LifeOsDbContext(DbContextOptions<LifeOsDbContext> options) : DbCont
     public DbSet<Achievement> Achievements => Set<Achievement>();
     public DbSet<Interview> Interviews => Set<Interview>();
     public DbSet<InterviewQA> InterviewQAs => Set<InterviewQA>();
+    public DbSet<DailyCheckin> DailyCheckins => Set<DailyCheckin>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -283,6 +284,13 @@ public class LifeOsDbContext(DbContextOptions<LifeOsDbContext> options) : DbCont
             e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
             e.HasOne(x => x.Profile).WithMany(p => p.Achievements).HasForeignKey(x => x.ProfileId);
             e.HasOne(x => x.Tree).WithMany(t => t.Achievements).HasForeignKey(x => x.TreeId);
+        });
+
+        // ── DailyCheckin ─────────────────────────────────────────────────
+        mb.Entity<DailyCheckin>(e =>
+        {
+            e.HasIndex(x => x.Date).IsUnique();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
         });
 
         // ── Interview ────────────────────────────────────────────────────

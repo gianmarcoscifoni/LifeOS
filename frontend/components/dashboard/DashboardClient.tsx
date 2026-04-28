@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Activity, Briefcase, DollarSign, FileText, Mic, Zap } from 'lucide-react';
 import { XpBar } from '@/components/brand/XpBar';
 import { loadVoiceSessions, loadAreaStreaks, type AreaStreak } from '@/lib/voiceSession';
+import { StreakHero } from '@/components/streak/StreakHero';
 
 interface DashboardOverview {
   brand: {
@@ -78,18 +79,7 @@ export function DashboardClient({ data }: { data: DashboardOverview | null }) {
         className="flex items-center justify-between"
       >
         <div>
-          <h1
-            className="text-3xl font-black tracking-tight"
-            style={{
-              background: 'linear-gradient(135deg, #E2E8F0 0%, rgba(226,232,240,0.6) 100%)',
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-            }}
-          >
-            Dashboard
-          </h1>
-          <p className="text-sm mt-0.5" style={{ color: 'rgba(226,232,240,0.4)' }}>
+          <p className="text-sm font-inter" style={{ color: 'rgba(226,232,240,0.4)' }}>
             {data ? data.brand.codename : 'sovereign_engineer'} ✦ Digital Aura
           </p>
         </div>
@@ -108,6 +98,9 @@ export function DashboardClient({ data }: { data: DashboardOverview | null }) {
           </div>
         )}
       </motion.div>
+
+      {/* ── STREAK HERO — main feature of LifeOS ── */}
+      <StreakHero />
 
       {/* XP Card */}
       {data && (
