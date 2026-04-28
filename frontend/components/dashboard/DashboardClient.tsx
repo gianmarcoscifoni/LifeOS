@@ -47,11 +47,11 @@ const TIER_COLOR: Record<string, string> = {
 
 const container = {
   hidden: {},
-  visible: { transition: { staggerChildren: 0.07 } },
+  visible: { transition: { staggerChildren: 0.09, delayChildren: 0.15 } },
 };
 const item = {
-  hidden: { opacity: 0, y: 28 },
-  visible: { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 110, damping: 16 } },
+  hidden: { opacity: 0, y: 36, scale: 0.96 },
+  visible: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring' as const, stiffness: 90, damping: 14 } },
 };
 
 export function DashboardClient({ data }: { data: DashboardOverview | null }) {
@@ -116,9 +116,9 @@ export function DashboardClient({ data }: { data: DashboardOverview | null }) {
       {/* XP Card */}
       {data && (
         <motion.div
-          initial={{ opacity: 0, scale: 0.97 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'spring', stiffness: 90, damping: 15, delay: 0.1 }}
+          initial={{ opacity: 0, y: 24, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 80, damping: 16, delay: 0.18 }}
           className="glass-purple p-5"
           style={{ borderRadius: '1.25rem' }}
         >
@@ -181,7 +181,7 @@ export function DashboardClient({ data }: { data: DashboardOverview | null }) {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
+          transition={{ type: 'spring', stiffness: 80, damping: 16, delay: 0.38 }}
           className="glass-purple p-5"
           style={{ borderRadius: '1.25rem' }}
         >
@@ -226,7 +226,7 @@ export function DashboardClient({ data }: { data: DashboardOverview | null }) {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
+          transition={{ type: 'spring', stiffness: 80, damping: 16, delay: 0.48 }}
           className="glass-purple p-5"
           style={{ borderRadius: '1.25rem' }}
         >

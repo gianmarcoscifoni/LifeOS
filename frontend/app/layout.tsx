@@ -9,6 +9,7 @@ import { VoiceOrb } from '@/components/voice/VoiceOrb';
 import { XpFloater } from '@/components/voice/XpFloater';
 import { VoiceAmbientGlow } from '@/components/voice/VoiceAmbientGlow';
 import { LetMeCook } from '@/components/shared/LetMeCook';
+import { GlobalLoader } from '@/components/shared/GlobalLoader';
 
 // Syne — ultra-sharp, futuristic headings (Zara / Apple vibes)
 const syne = Syne({
@@ -57,6 +58,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <VoiceOrb />
           <XpFloater />
           <LetMeCook />
+          <GlobalLoader />
         </Providers>
       </body>
     </html>
