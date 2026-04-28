@@ -1,6 +1,7 @@
 'use client';
 import {
-  DndContext, DragEndEvent, PointerSensor, useSensor, useSensors, closestCenter,
+  DndContext, DragEndEvent, DragOverEvent, PointerSensor,
+  useSensor, useSensors, closestCenter, useDroppable,
 } from '@dnd-kit/core';
 import {
   SortableContext, useSortable, verticalListSortingStrategy,
@@ -34,6 +35,28 @@ const COLUMNS: { key: Status; label: string; accent: string; bg: string }[] = [
   { key: 'published', label: '🚀 Published', accent: 'rgba(201,168,76,0.5)',  bg: 'rgba(201,168,76,0.06)' },
   { key: 'archived',  label: '📦 Archived',  accent: 'rgba(255,255,255,0.15)',bg: 'rgba(255,255,255,0.03)' },
 ];
+
+function DroppableColumn({ id, children, style, className }: {
+  id: string;
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+  className?: string;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={className}
+      style={{
+        ...style,
+        outline: isOver ? '1.5px solid rgba(147,51,234,0.5)' : undefined,
+        transition: 'outline 0.15s',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
 
 function KanbanItem({ item }: { item: ContentItem }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -118,21 +141,31 @@ export function KanbanBoard({ initialItems }: KanbanBoardProps) {
   // Sync when parent data loads
   useEffect(() => { if (initialItems.length > 0) setItems(initialItems); }, [initialItems]);
 
-  function handleDragEnd(event: DragEndEvent) {
+  function resolveStatus(overId: string, fallback: Status): Status {
+    if (COLUMNS.some(c => c.key === overId)) return overId as Status;
+    return items.find(i => i.id === overId)?.status ?? fallback;
+  }
+
+  function handleDragOver(event: DragOverEvent) {
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    if (!over) return;
     const dragged = items.find(i => i.id === active.id);
     if (!dragged) return;
-    const targetCol = COLUMNS.find(c => c.key === over.id);
-    const newStatus = targetCol
-      ? targetCol.key
-      : (items.find(i => i.id === over.id)?.status ?? dragged.status);
-    if (newStatus === dragged.status) return;
-    setItems(prev => prev.map(i => i.id === dragged.id ? { ...i, status: newStatus } : i));
+    const newStatus = resolveStatus(String(over.id), dragged.status);
+    if (newStatus !== dragged.status) {
+      setItems(prev => prev.map(i => i.id === dragged.id ? { ...i, status: newStatus } : i));
+    }
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    const dragged = items.find(i => i.id === active.id);
+    if (!dragged) return;
+    const finalStatus = over ? resolveStatus(String(over.id), dragged.status) : dragged.status;
     fetch(`/api/proxy/content/queue/${dragged.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
+      body: JSON.stringify({ status: finalStatus }),
     }).catch(() => {});
   }
 
@@ -163,14 +196,15 @@ export function KanbanBoard({ initialItems }: KanbanBoardProps) {
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
       <div className="flex gap-3 overflow-x-auto pb-4 min-h-[60vh]">
         {COLUMNS.map(col => {
           const colItems = items.filter(i => i.status === col.key);
           const isAdding = addingTo === col.key;
           return (
-            <div
+            <DroppableColumn
               key={col.key}
+              id={col.key}
               className="flex-shrink-0 w-56 flex flex-col rounded-2xl p-3"
               style={{
                 background: col.bg,
@@ -264,7 +298,7 @@ export function KanbanBoard({ initialItems }: KanbanBoardProps) {
                   {colItems.map(item => <KanbanItem key={item.id} item={item} />)}
                 </div>
               </SortableContext>
-            </div>
+            </DroppableColumn>
           );
         })}
       </div>
