@@ -136,23 +136,24 @@ export function KanbanBoard({ initialItems }: KanbanBoardProps) {
     }).catch(() => {});
   }
 
-  async function addItem(status: Status) {
+  async function addItem() {
     if (!newTitle.trim()) return;
     setSaving(true);
     try {
-      const body: Record<string, string> = { title: newTitle.trim() };
-      if (newPlatformId) body.platform_id = newPlatformId;
       const res = await fetch('/api/proxy/content/queue', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: newTitle.trim(), platformId: newPlatformId || undefined, status }),
+        body: JSON.stringify({
+          title: newTitle.trim(),
+          platform_id: newPlatformId || undefined,
+        }),
       });
       if (res.ok) {
         const created = await res.json();
         setItems(prev => [...prev, {
           id: created.id,
           title: created.title,
-          status: created.status,
+          status: 'idea' as Status,
           platform: created.platform_name ?? created.platformName,
         }]);
         setAddingTo(null);
@@ -187,16 +188,18 @@ export function KanbanBoard({ initialItems }: KanbanBoardProps) {
                   >
                     {colItems.length}
                   </span>
-                  <button
-                    onClick={() => { setAddingTo(isAdding ? null : col.key); setNewTitle(''); }}
-                    className="w-5 h-5 rounded-md flex items-center justify-center transition-all"
-                    style={{
-                      background: isAdding ? 'rgba(147,51,234,0.3)' : 'rgba(255,255,255,0.06)',
-                      color: isAdding ? '#C084FC' : 'rgba(226,232,240,0.4)',
-                    }}
-                  >
-                    {isAdding ? <X size={10} /> : <Plus size={10} />}
-                  </button>
+                  {col.key === 'idea' && (
+                    <button
+                      onClick={() => { setAddingTo(isAdding ? null : col.key); setNewTitle(''); }}
+                      className="w-5 h-5 rounded-md flex items-center justify-center transition-all"
+                      style={{
+                        background: isAdding ? 'rgba(147,51,234,0.3)' : 'rgba(255,255,255,0.06)',
+                        color: isAdding ? '#C084FC' : 'rgba(226,232,240,0.4)',
+                      }}
+                    >
+                      {isAdding ? <X size={10} /> : <Plus size={10} />}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -212,7 +215,7 @@ export function KanbanBoard({ initialItems }: KanbanBoardProps) {
                       autoFocus
                       value={newTitle}
                       onChange={e => setNewTitle(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') addItem(col.key); if (e.key === 'Escape') setAddingTo(null); }}
+                      onKeyDown={e => { if (e.key === 'Enter') addItem(); if (e.key === 'Escape') setAddingTo(null); }}
                       placeholder="Title…"
                       className="w-full bg-transparent outline-none text-xs"
                       style={{
@@ -240,7 +243,7 @@ export function KanbanBoard({ initialItems }: KanbanBoardProps) {
                       </select>
                     )}
                     <button
-                      onClick={() => addItem(col.key)}
+                      onClick={() => addItem()}
                       disabled={saving || !newTitle.trim()}
                       className="w-full py-1.5 rounded-lg text-[10px] font-bold transition-all"
                       style={{
