@@ -355,9 +355,7 @@ export function StreakHero() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
-          className="rounded-2xl px-5 py-4"
-          className="glass-purple"
-          style={{ border: 'none' }}
+          className="glass-purple px-5 py-4"
         >
           <p className="text-[10px] font-syne font-bold tracking-widest uppercase mb-4" style={{ color: 'rgba(226,232,240,0.3)' }}>
             Milestone Path
@@ -370,9 +368,7 @@ export function StreakHero() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
-          className="rounded-2xl px-5 py-4"
-          className="glass-purple"
-          style={{ border: 'none' }}
+          className="glass-purple px-5 py-4"
         >
           <div className="flex items-center justify-between mb-3">
             <p className="text-[10px] font-syne font-bold tracking-widest uppercase" style={{ color: 'rgba(226,232,240,0.3)' }}>
