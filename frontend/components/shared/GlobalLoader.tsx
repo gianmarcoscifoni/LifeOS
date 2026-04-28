@@ -2,6 +2,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 
+type B4 = [number, number, number, number];
+const EXPO_OUT: B4  = [0.22, 1, 0.36, 1];
+const EXPO_IN: B4   = [0.4, 0, 1, 1];
+const WARP_EASE: B4 = [0.76, 0, 0.24, 1];
+
 // ─── Effect A: Cosmic (particles + orbit rings) ────────────────────────────
 const PARTICLES = [
   { x: -90, y: -60,  delay: 0.2,  size: 3 },
@@ -43,7 +48,7 @@ function CosmicEffect({ exiting }: { exiting: boolean }) {
           animate={exiting ? { scale: 2.5, opacity: 0 } : { scale: 1, opacity: 1 }}
           transition={exiting
             ? { duration: 0.45 }
-            : { type: 'spring', stiffness: 70 - i * 10, damping: 18, delay: 0.2 + i * 0.1 }
+            : { type: 'spring' as const, stiffness: 70 - i * 10, damping: 18, delay: 0.2 + i * 0.1 }
           }
         />
       ))}
@@ -195,8 +200,8 @@ function WarpEffect({ exiting }: { exiting: boolean }) {
           initial={{ scale: 0 }}
           animate={exiting ? { scale: 8, opacity: 0 } : { scale: [0, 1.4, 1] }}
           transition={exiting
-            ? { duration: 0.5, ease: [0.76, 0, 0.24, 1] }
-            : { duration: 0.6, delay: 0.1, ease: [0.22, 1, 0.36, 1] }
+            ? { duration: 0.5, ease: WARP_EASE }
+            : { duration: 0.6, delay: 0.1, ease: EXPO_OUT }
           }
         />
       </motion.div>
@@ -217,7 +222,7 @@ function WarpEffect({ exiting }: { exiting: boolean }) {
           }
           transition={exiting
             ? { duration: 0.4 + i * 0.05 }
-            : { duration: 0.55, delay: 0.08 + i * 0.09, ease: [0.22, 1, 0.36, 1] }
+            : { duration: 0.55, delay: 0.08 + i * 0.09, ease: EXPO_OUT }
           }
         />
       ))}
@@ -246,7 +251,7 @@ function WarpEffect({ exiting }: { exiting: boolean }) {
 
 // ─── Logo (shared) ─────────────────────────────────────────────────────────
 function LogoBlock({ exiting, variant }: { exiting: boolean; variant: number }) {
-  const springIn = { type: 'spring', stiffness: 160, damping: 22, delay: variant === 2 ? 0.35 : 0.18 };
+  const springIn = { type: 'spring' as const as const, stiffness: 160, damping: 22, delay: variant === 2 ? 0.35 : 0.18 };
   return (
     <motion.div
       className="relative flex flex-col items-center gap-3"
@@ -261,8 +266,8 @@ function LogoBlock({ exiting, variant }: { exiting: boolean; variant: number }) 
           : { scale: 1, opacity: 1, y: 0 }
       }
       transition={exiting
-        ? { duration: 0.35, ease: [0.4, 0, 1, 1] }
-        : variant === 1 ? { duration: 0.55, delay: 0.25, ease: [0.22, 1, 0.36, 1] } : springIn
+        ? { duration: 0.35, ease: EXPO_IN }
+        : variant === 1 ? { duration: 0.55, delay: 0.25, ease: EXPO_OUT } : springIn
       }
     >
       <div style={{ position: 'relative' }}>
@@ -329,7 +334,7 @@ export function GlobalLoader() {
       initial={{ y: 0 }}
       animate={exiting ? { y: '-100%' } : { y: 0 }}
       transition={exiting
-        ? { duration: 0.75, ease: [0.76, 0, 0.24, 1], delay: 0.12 }
+        ? { duration: 0.75, ease: WARP_EASE, delay: 0.12 }
         : { duration: 0 }
       }
     >
