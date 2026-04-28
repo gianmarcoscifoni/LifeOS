@@ -38,10 +38,40 @@ public static class ContentEndpoints
             [ProducesResponseType<ContentQueueDto>(201)]
             async (CreateContentRequest req, LifeOsDbContext db) =>
             {
-                var platformId = req.PlatformId
-                    ?? (await db.Platforms.OrderBy(p => p.Priority).Select(p => p.Id).FirstOrDefaultAsync());
-                if (platformId == Guid.Empty)
-                    return Results.BadRequest("No platforms available — seed the database.");
+                Guid? platformId = req.PlatformId;
+
+                if (platformId is null && req.PlatformName is not null)
+                {
+                    var existing = await db.Platforms
+                        .FirstOrDefaultAsync(p => p.Name.ToLower() == req.PlatformName.ToLower());
+                    if (existing is not null)
+                    {
+                        platformId = existing.Id;
+                    }
+                    else
+                    {
+                        var profile = await db.BrandProfiles.FirstOrDefaultAsync();
+                        if (profile is not null)
+                        {
+                            var newP = new Platform
+                            {
+                                Id        = Guid.NewGuid(),
+                                ProfileId = profile.Id,
+                                Name      = req.PlatformName,
+                                Status    = "active",
+                                Priority  = 99,
+                                CreatedAt = DateTime.UtcNow,
+                            };
+                            db.Platforms.Add(newP);
+                            await db.SaveChangesAsync();
+                            platformId = newP.Id;
+                        }
+                    }
+                }
+
+                platformId ??= await db.Platforms.OrderBy(p => p.Priority).Select(p => p.Id).FirstOrDefaultAsync();
+                if (platformId == Guid.Empty || platformId is null)
+                    return Results.BadRequest("No platforms available.");
                 var item = new ContentQueue
                 {
                     PlatformId   = platformId,

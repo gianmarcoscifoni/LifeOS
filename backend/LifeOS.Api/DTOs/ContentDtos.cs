@@ -21,6 +21,7 @@ public record ContentQueueDto(
 public record CreateContentRequest(
     string Title,
     Guid? PlatformId = null,
+    string? PlatformName = null,
     string? Draft = null,
     Guid? PillarId = null,
     Guid? TreeId = null,

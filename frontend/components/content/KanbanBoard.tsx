@@ -15,8 +15,9 @@ type Status = 'idea' | 'drafting' | 'ready' | 'scheduled' | 'published' | 'archi
 
 // ── Platform icons ────────────────────────────────────────────────────────
 
-const PLATFORM_META: Record<string, { color: string; icon: React.ReactNode }> = {
+const PLATFORM_META: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   linkedin: {
+    label: 'LinkedIn',
     color: '#0A66C2',
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
@@ -25,6 +26,7 @@ const PLATFORM_META: Record<string, { color: string; icon: React.ReactNode }> = 
     ),
   },
   instagram: {
+    label: 'Instagram',
     color: '#E1306C',
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
@@ -33,6 +35,7 @@ const PLATFORM_META: Record<string, { color: string; icon: React.ReactNode }> = 
     ),
   },
   youtube: {
+    label: 'YouTube',
     color: '#FF0000',
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
@@ -41,6 +44,7 @@ const PLATFORM_META: Record<string, { color: string; icon: React.ReactNode }> = 
     ),
   },
   github: {
+    label: 'GitHub',
     color: '#E2E8F0',
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
@@ -49,6 +53,7 @@ const PLATFORM_META: Record<string, { color: string; icon: React.ReactNode }> = 
     ),
   },
   twitter: {
+    label: 'Twitter',
     color: '#1DA1F2',
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
@@ -57,6 +62,7 @@ const PLATFORM_META: Record<string, { color: string; icon: React.ReactNode }> = 
     ),
   },
   x: {
+    label: 'X',
     color: '#E2E8F0',
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
@@ -65,6 +71,7 @@ const PLATFORM_META: Record<string, { color: string; icon: React.ReactNode }> = 
     ),
   },
   tiktok: {
+    label: 'TikTok',
     color: '#69C9D0',
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
@@ -73,6 +80,7 @@ const PLATFORM_META: Record<string, { color: string; icon: React.ReactNode }> = 
     ),
   },
   medium: {
+    label: 'Medium',
     color: '#E2E8F0',
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
@@ -109,7 +117,7 @@ interface ContentItem {
   pillar?: string;
 }
 
-interface Platform { id: string; name: string }
+const ALL_PLATFORMS = Object.entries(PLATFORM_META).map(([key, v]) => ({ key, label: v.label, color: v.color, icon: v.icon }));
 
 interface KanbanBoardProps {
   initialItems: ContentItem[];
@@ -202,22 +210,11 @@ function KanbanItem({ item }: { item: ContentItem }) {
 
 export function KanbanBoard({ initialItems }: KanbanBoardProps) {
   const [items, setItems] = useState<ContentItem[]>(initialItems);
-  const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [addingTo, setAddingTo] = useState<Status | null>(null);
   const [newTitle, setNewTitle] = useState('');
-  const [newPlatformId, setNewPlatformId] = useState('');
+  const [newPlatformKey, setNewPlatformKey] = useState(ALL_PLATFORMS[0]?.key ?? '');
   const [saving, setSaving] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-
-  useEffect(() => {
-    fetch('/api/proxy/content/platforms')
-      .then(r => r.ok ? r.json() : [])
-      .then((list: { id: string; name: string }[]) => {
-        setPlatforms(list);
-        if (list[0]) setNewPlatformId(list[0].id);
-      })
-      .catch(() => {});
-  }, []);
 
   // Sync when parent data loads
   useEffect(() => { if (initialItems.length > 0) setItems(initialItems); }, [initialItems]);
@@ -253,13 +250,14 @@ export function KanbanBoard({ initialItems }: KanbanBoardProps) {
   async function addItem() {
     if (!newTitle.trim()) return;
     setSaving(true);
+    const platformLabel = PLATFORM_META[newPlatformKey]?.label ?? newPlatformKey;
     try {
       const res = await fetch('/api/proxy/content/queue', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: newTitle.trim(),
-          platform_id: newPlatformId || undefined,
+          platform_name: platformLabel,
         }),
       });
       if (res.ok) {
@@ -268,7 +266,7 @@ export function KanbanBoard({ initialItems }: KanbanBoardProps) {
           id: created.id,
           title: created.title,
           status: 'idea' as Status,
-          platform: created.platform_name ?? created.platformName,
+          platform: created.platform_name ?? created.platformName ?? platformLabel,
         }]);
         setAddingTo(null);
         setNewTitle('');
@@ -341,22 +339,27 @@ export function KanbanBoard({ initialItems }: KanbanBoardProps) {
                         background: 'rgba(255,255,255,0.05)',
                       }}
                     />
-                    {platforms.length > 0 && (
-                      <select
-                        value={newPlatformId}
-                        onChange={e => setNewPlatformId(e.target.value)}
-                        className="w-full text-xs outline-none"
-                        style={{
-                          color: '#E2E8F0',
-                          background: 'rgba(255,255,255,0.05)',
-                          border: '1px solid rgba(255,255,255,0.10)',
-                          borderRadius: '0.625rem',
-                          padding: '6px 10px',
-                        }}
-                      >
-                        {platforms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
-                    )}
+                    <div className="flex flex-wrap gap-1.5">
+                      {ALL_PLATFORMS.map(p => {
+                        const active = newPlatformKey === p.key;
+                        return (
+                          <button
+                            key={p.key}
+                            type="button"
+                            onClick={() => setNewPlatformKey(p.key)}
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-bold transition-all"
+                            style={{
+                              background: active ? `${p.color}22` : 'rgba(255,255,255,0.04)',
+                              border: `1px solid ${active ? p.color + '60' : 'rgba(255,255,255,0.08)'}`,
+                              color: active ? p.color : 'rgba(226,232,240,0.35)',
+                            }}
+                          >
+                            <span style={{ color: active ? p.color : 'rgba(226,232,240,0.25)' }}>{p.icon}</span>
+                            {p.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                     <button
                       onClick={() => addItem()}
                       disabled={saving || !newTitle.trim()}
