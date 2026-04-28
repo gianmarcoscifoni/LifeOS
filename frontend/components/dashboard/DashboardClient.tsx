@@ -79,10 +79,18 @@ export function DashboardClient({ data }: { data: DashboardOverview | null }) {
         className="flex items-center justify-between"
       >
         <div>
-          <p className="text-lg font-syne font-bold" style={{ color: 'rgba(226,232,240,0.85)' }}>
+          <h1
+            className="font-syne font-extrabold text-2xl tracking-tight"
+            style={{
+              background: 'linear-gradient(135deg, #9333EA 0%, #C9A84C 100%)',
+              WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}
+          >
             LifeOS
-          </p>
-          <p className="text-xs font-inter mt-0.5" style={{ color: 'rgba(226,232,240,0.35)' }}>
+          </h1>
+          <p className="font-inter text-xs mt-0.5" style={{ color: 'rgba(226,232,240,0.35)', letterSpacing: '0.08em' }}>
             {new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
@@ -174,8 +182,8 @@ export function DashboardClient({ data }: { data: DashboardOverview | null }) {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.35 }}
-          className="glass p-5"
-          style={{ borderRadius: '1.25rem', borderColor: 'rgba(147,51,234,0.25)' }}
+          className="glass-purple p-5"
+          style={{ borderRadius: '1.25rem' }}
         >
           <div className="flex items-center gap-2 mb-2">
             <Mic size={14} style={{ color: '#9333EA' }} />
@@ -219,7 +227,7 @@ export function DashboardClient({ data }: { data: DashboardOverview | null }) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="glass p-5"
+          className="glass-purple p-5"
           style={{ borderRadius: '1.25rem' }}
         >
           <div className="flex items-center justify-between mb-3">
@@ -277,7 +285,7 @@ function StatCard({
   return (
     <motion.div
       variants={item}
-      className="glass p-4 space-y-2 cursor-default"
+      className="glass-purple p-4 space-y-2 cursor-default"
       style={{ borderRadius: '1.25rem' }}
       whileHover={{
         scale: 1.03,
