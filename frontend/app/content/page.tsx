@@ -18,7 +18,15 @@ export default function ContentPage() {
   useEffect(() => {
     fetch('/api/proxy/content/queue')
       .then(r => r.ok ? r.json() : [])
-      .then(setItems)
+      .then((data: Record<string, unknown>[]) =>
+        setItems(data.map(item => ({
+          id: item.id as string,
+          title: item.title as string,
+          status: item.status as ContentItem['status'],
+          platform: (item.platform_name ?? item.platformName) as string | undefined,
+          pillar: (item.pillar_name ?? item.pillarName) as string | undefined,
+        })))
+      )
       .catch(() => setItems([]));
   }, []);
 

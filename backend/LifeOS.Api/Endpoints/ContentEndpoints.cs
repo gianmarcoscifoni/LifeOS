@@ -74,7 +74,7 @@ public static class ContentEndpoints
                     return Results.BadRequest("No platforms available.");
                 var item = new ContentQueue
                 {
-                    PlatformId   = platformId,
+                    PlatformId   = platformId!.Value,
                     Title        = req.Title,
                     Draft        = req.Draft,
                     PillarId     = req.PillarId,
