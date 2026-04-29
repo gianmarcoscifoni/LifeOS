@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using LifeOS.Api.Data;
 using LifeOS.Api.Models;
+using LifeOS.Api.Services;
 
 namespace LifeOS.Api.Endpoints;
 
@@ -56,15 +57,26 @@ public static class StreakEndpoints
             db.DailyCheckins.Add(new DailyCheckin { Date = today, StreakDay = streakDay });
 
             // XP: 50 base + 10 per day every 7d multiplier
-            var baseXp   = 50 + (streakDay / 7) * 10;
-            var profile  = await db.BrandProfiles.FirstOrDefaultAsync();
-            if (profile is not null) profile.TotalXp += baseXp;
+            var baseXp  = 50 + (streakDay / 7) * 10;
+            var profile = await db.BrandProfiles.FirstOrDefaultAsync();
 
             // Milestone hit?
             var hit = Milestones.FirstOrDefault(m => m.Days == streakDay);
-            if (hit is not null && profile is not null)
+
+            if (profile is not null)
             {
-                profile.TotalXp += hit.XpReward;
+                profile.TotalXp += baseXp + (hit?.XpReward ?? 0);
+                // Recalculate level/tier so dashboard reflects the XP immediately
+                int acc = 0, lvl = 1;
+                while (acc + XpCalculatorService.XpToNextLevel(lvl) <= profile.TotalXp)
+                {
+                    acc += XpCalculatorService.XpToNextLevel(lvl);
+                    lvl++;
+                }
+                profile.GlobalLevel = lvl;
+                profile.Tier        = XpCalculatorService.TierForLevel(lvl);
+                profile.Title       = XpCalculatorService.TitleForTier(profile.Tier);
+                profile.UpdatedAt   = DateTime.UtcNow;
             }
 
             await db.SaveChangesAsync();

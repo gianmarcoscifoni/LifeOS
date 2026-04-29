@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using LifeOS.Api.Data;
 using LifeOS.Api.DTOs;
 using LifeOS.Api.Models;
+using LifeOS.Api.Services;
 
 namespace LifeOS.Api.Endpoints;
 
@@ -75,7 +76,25 @@ public static class HabitEndpoints
                 }
 
                 if (req.Completed)
+                {
                     await RecalculateStreak(habit, db);
+                    // Award 25 XP per completed habit and update level
+                    var profile = await db.BrandProfiles.FirstOrDefaultAsync();
+                    if (profile is not null)
+                    {
+                        profile.TotalXp += 25;
+                        int acc = 0, lvl = 1;
+                        while (acc + XpCalculatorService.XpToNextLevel(lvl) <= profile.TotalXp)
+                        {
+                            acc += XpCalculatorService.XpToNextLevel(lvl);
+                            lvl++;
+                        }
+                        profile.GlobalLevel = lvl;
+                        profile.Tier        = XpCalculatorService.TierForLevel(lvl);
+                        profile.Title       = XpCalculatorService.TitleForTier(profile.Tier);
+                        profile.UpdatedAt   = DateTime.UtcNow;
+                    }
+                }
 
                 await db.SaveChangesAsync();
                 return Results.Ok(new HabitLogDto(existing.Id, existing.HabitId, existing.LoggedDate, existing.Completed, existing.Notes));

@@ -1,7 +1,7 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Briefcase, DollarSign, FileText, Mic, Zap } from 'lucide-react';
+import { Activity, Briefcase, DollarSign, FileText, Mic, Zap, Timer } from 'lucide-react';
 import { XpBar } from '@/components/brand/XpBar';
 import { loadVoiceSessions, loadAreaStreaks, type AreaStreak } from '@/lib/voiceSession';
 import { StreakHero } from '@/components/streak/StreakHero';
@@ -45,16 +45,16 @@ const TIER_COLOR: Record<string, string> = {
   legendary: '#C084FC',
 };
 
-// Outer cascade — each top-level block enters one after another
+// Outer cascade — slow, cinematic, PowerPoint-grade entrance
 const cascade = {
   hidden: {},
-  visible: { transition: { staggerChildren: 0.13, delayChildren: 0.08 } },
+  visible: { transition: { staggerChildren: 0.18, delayChildren: 0.15 } },
 };
 const block = {
-  hidden: { opacity: 0, y: 48, scale: 0.93, filter: 'blur(5px)' },
+  hidden: { opacity: 0, y: 60, scale: 0.92, filter: 'blur(8px)' },
   visible: {
     opacity: 1, y: 0, scale: 1, filter: 'blur(0px)',
-    transition: { type: 'spring' as const, stiffness: 78, damping: 14 },
+    transition: { type: 'spring' as const, stiffness: 65, damping: 16 },
   },
 };
 
@@ -68,6 +68,12 @@ const item = {
   visible: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring' as const, stiffness: 90, damping: 14 } },
 };
 
+function formatTime(secs: number) {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
 export function DashboardClient({ data }: { data: DashboardOverview | null }) {
   const xpPercent = data
     ? Math.min(100, Math.round((data.brand.currentLevelXp / data.brand.xpToNextLevel) * 100))
@@ -76,11 +82,22 @@ export function DashboardClient({ data }: { data: DashboardOverview | null }) {
 
   const [latestCoaching, setLatestCoaching] = useState<string | null>(null);
   const [areaStreaks, setAreaStreaks] = useState<AreaStreak[]>([]);
+  const [sessionSecs, setSessionSecs] = useState(0);
+  const sessionStart = useRef<number>(Date.now());
 
   useEffect(() => {
     const sessions = loadVoiceSessions();
     if (sessions[0]) setLatestCoaching(sessions[0].coachingMessage);
     setAreaStreaks(loadAreaStreaks().filter(s => s.currentStreak >= 2));
+  }, []);
+
+  // Session timer — tracks time spent in this page session
+  useEffect(() => {
+    sessionStart.current = Date.now();
+    const id = setInterval(() => {
+      setSessionSecs(Math.floor((Date.now() - sessionStart.current) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
   }, []);
 
   return (
@@ -110,19 +127,38 @@ export function DashboardClient({ data }: { data: DashboardOverview | null }) {
             </p>
           </div>
 
-          {data && (
-            <div
-              className="px-3 py-1.5 rounded-xl text-xs font-black tracking-widest"
+          <div className="flex items-center gap-2">
+            {/* Session timer */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: sessionSecs >= 5 ? 1 : 0 }}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-inter"
               style={{
-                color: tierColor,
-                background: `${tierColor}15`,
-                border: `1px solid ${tierColor}40`,
-                boxShadow: `0 0 12px ${tierColor}30`,
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.07)',
+                color: 'rgba(226,232,240,0.3)',
               }}
             >
-              {data.brand.tier.toUpperCase()} · LV{data.brand.level}
-            </div>
-          )}
+              <motion.div animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.6, repeat: Infinity }}>
+                <Timer size={9} />
+              </motion.div>
+              {formatTime(sessionSecs)}
+            </motion.div>
+
+            {data && (
+              <div
+                className="px-3 py-1.5 rounded-xl text-xs font-black tracking-widest"
+                style={{
+                  color: tierColor,
+                  background: `${tierColor}15`,
+                  border: `1px solid ${tierColor}40`,
+                  boxShadow: `0 0 12px ${tierColor}30`,
+                }}
+              >
+                {data.brand.tier.toUpperCase()} · LV{data.brand.level}
+              </div>
+            )}
+          </div>
         </motion.div>
 
         {/* Streak Hero */}
@@ -130,23 +166,50 @@ export function DashboardClient({ data }: { data: DashboardOverview | null }) {
           <StreakHero />
         </motion.div>
 
-        {/* XP / Aura Progress */}
+        {/* XP / Aura Progress — floats */}
         {data && (
-          <motion.div variants={block} className="glass-purple p-5" style={{ borderRadius: '1.25rem' }}>
-            <div className="flex items-center gap-2 mb-4">
-              <Zap size={16} style={{ color: '#9333EA', filter: 'drop-shadow(0 0 6px rgba(147,51,234,0.8))' }} />
-              <span className="text-sm font-semibold" style={{ color: '#C084FC' }}>
-                Aura Progress
-              </span>
-            </div>
-            <XpBar
-              currentXp={data.brand.currentLevelXp}
-              xpToNextLevel={data.brand.xpToNextLevel}
-              level={data.brand.level}
-            />
-            <p className="text-xs mt-3" style={{ color: 'rgba(226,232,240,0.35)' }}>
-              {xpPercent}% to Level {data.brand.level + 1} · Total: {data.brand.totalXp.toLocaleString()} XP
-            </p>
+          <motion.div variants={block}>
+            <motion.div
+              animate={{ y: [-3, 0, -3] }}
+              transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}
+              className="relative p-5"
+              style={{
+                borderRadius: '1.25rem',
+                background: 'linear-gradient(135deg, rgba(109,40,217,0.14) 0%, rgba(10,4,21,0.9) 70%)',
+                border: '1.5px solid rgba(147,51,234,0.3)',
+              }}
+            >
+              {/* Pulsing glow ring */}
+              <motion.div
+                className="absolute inset-0 rounded-[1.25rem] pointer-events-none"
+                animate={{ boxShadow: [
+                  '0 0 20px rgba(147,51,234,0.06)',
+                  '0 0 50px rgba(147,51,234,0.2)',
+                  '0 0 20px rgba(147,51,234,0.06)',
+                ]}}
+                transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+              />
+              <div className="flex items-center gap-2 mb-4 relative">
+                <motion.div
+                  animate={{ scale: [1, 1.15, 1] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  <Zap size={16} style={{ color: '#9333EA', filter: 'drop-shadow(0 0 8px rgba(147,51,234,0.9))' }} />
+                </motion.div>
+                <span className="text-sm font-semibold" style={{ color: '#C084FC' }}>Aura Progress</span>
+                <div className="ml-auto text-[10px] font-inter" style={{ color: 'rgba(226,232,240,0.25)' }}>
+                  Total: {data.brand.totalXp.toLocaleString()} XP
+                </div>
+              </div>
+              <XpBar
+                currentXp={data.brand.currentLevelXp}
+                xpToNextLevel={data.brand.xpToNextLevel}
+                level={data.brand.level}
+              />
+              <p className="text-xs mt-3" style={{ color: 'rgba(226,232,240,0.3)' }}>
+                {xpPercent}% to Level {data.brand.level + 1}
+              </p>
+            </motion.div>
           </motion.div>
         )}
 
