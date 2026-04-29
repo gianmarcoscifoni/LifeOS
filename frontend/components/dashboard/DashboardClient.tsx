@@ -45,12 +45,26 @@ const TIER_COLOR: Record<string, string> = {
   legendary: '#C084FC',
 };
 
-const container = {
+// Outer cascade — each top-level block enters one after another
+const cascade = {
   hidden: {},
-  visible: { transition: { staggerChildren: 0.09, delayChildren: 0.15 } },
+  visible: { transition: { staggerChildren: 0.13, delayChildren: 0.08 } },
+};
+const block = {
+  hidden: { opacity: 0, y: 48, scale: 0.93, filter: 'blur(5px)' },
+  visible: {
+    opacity: 1, y: 0, scale: 1, filter: 'blur(0px)',
+    transition: { type: 'spring' as const, stiffness: 78, damping: 14 },
+  },
+};
+
+// Inner grid stagger for stat cards
+const gridContainer = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.08 } },
 };
 const item = {
-  hidden: { opacity: 0, y: 36, scale: 0.96 },
+  hidden: { opacity: 0, y: 28, scale: 0.93 },
   visible: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring' as const, stiffness: 90, damping: 14 } },
 };
 
@@ -70,205 +84,186 @@ export function DashboardClient({ data }: { data: DashboardOverview | null }) {
   }, []);
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto">
-      {/* Header */}
+    <div className="p-6 max-w-5xl mx-auto">
       <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="flex items-center justify-between"
-      >
-        <div>
-          <h1
-            className="font-syne font-extrabold text-2xl tracking-tight"
-            style={{
-              background: 'linear-gradient(135deg, #9333EA 0%, #C9A84C 100%)',
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-            }}
-          >
-            LifeOS
-          </h1>
-          <p className="font-inter text-xs mt-0.5" style={{ color: 'rgba(226,232,240,0.35)', letterSpacing: '0.08em' }}>
-            {new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
-          </p>
-        </div>
-
-        {data && (
-          <div
-            className="px-3 py-1.5 rounded-xl text-xs font-black tracking-widest"
-            style={{
-              color: tierColor,
-              background: `${tierColor}15`,
-              border: `1px solid ${tierColor}40`,
-              boxShadow: `0 0 12px ${tierColor}30`,
-            }}
-          >
-            {data.brand.tier.toUpperCase()} · LV{data.brand.level}
-          </div>
-        )}
-      </motion.div>
-
-      {/* ── STREAK HERO — main feature of LifeOS ── */}
-      <StreakHero />
-
-      {/* XP Card */}
-      {data && (
-        <motion.div
-          initial={{ opacity: 0, y: 24, scale: 0.96 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ type: 'spring', stiffness: 80, damping: 16, delay: 0.18 }}
-          className="glass-purple p-5"
-          style={{ borderRadius: '1.25rem' }}
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <Zap size={16} style={{ color: '#9333EA', filter: 'drop-shadow(0 0 6px rgba(147,51,234,0.8))' }} />
-            <span className="text-sm font-semibold" style={{ color: '#C084FC' }}>
-              Aura Progress
-            </span>
-          </div>
-          <XpBar
-            currentXp={data.brand.currentLevelXp}
-            xpToNextLevel={data.brand.xpToNextLevel}
-            level={data.brand.level}
-          />
-          <p className="text-xs mt-3" style={{ color: 'rgba(226,232,240,0.35)' }}>
-            {xpPercent}% to Level {data.brand.level + 1} · Total: {data.brand.totalXp.toLocaleString()} XP
-          </p>
-        </motion.div>
-      )}
-
-      {/* Stats Grid */}
-      <motion.div
-        className="grid grid-cols-2 lg:grid-cols-4 gap-3"
-        variants={container}
+        className="space-y-6"
+        variants={cascade}
         initial="hidden"
         animate="visible"
       >
-        <StatCard
-          icon={<Activity size={20} />}
-          label="Habits Today"
-          value={data ? `${data.habits.completedToday}/${data.habits.totalHabits}` : '—'}
-          sub={data ? `🔥 ${data.habits.longestStreak}d streak` : ''}
-          accent="#9333EA"
-        />
-        <StatCard
-          icon={<Briefcase size={20} />}
-          label="Active Goals"
-          value={data ? String(data.career.activeGoals) : '—'}
-          sub={data ? `${data.career.completedMilestones}/${data.career.totalMilestones} milestones` : ''}
-          accent="#C084FC"
-        />
-        <StatCard
-          icon={<DollarSign size={20} />}
-          label="Monthly Savings"
-          value={data ? `€${data.finance.monthlySavings.toLocaleString()}` : '—'}
-          sub={data ? `Target: €${data.finance.targetRal.toLocaleString()} RAL` : ''}
-          accent="#C9A84C"
-        />
-        <StatCard
-          icon={<FileText size={20} />}
-          label="Content Queue"
-          value={data ? String(data.content.queueSize) : '—'}
-          sub={data ? `${data.content.readyToPublish} ready` : ''}
-          accent="#F0C96E"
-        />
-      </motion.div>
-
-      {/* Voice coaching banner */}
-      {latestCoaching && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 80, damping: 16, delay: 0.38 }}
-          className="glass-purple p-5"
-          style={{ borderRadius: '1.25rem' }}
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <Mic size={14} style={{ color: '#9333EA' }} />
-            <span className="text-xs font-semibold tracking-widest uppercase" style={{ color: 'rgba(192,132,252,0.7)' }}>
-              Voice Coach
-            </span>
-          </div>
-          <p className="text-sm font-inter leading-relaxed" style={{ color: 'rgba(226,232,240,0.75)' }}>
-            {latestCoaching}
-          </p>
-        </motion.div>
-      )}
-
-      {/* Area streaks from voice sessions */}
-      {areaStreaks.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.42 }}
-          className="flex gap-2 flex-wrap"
-        >
-          {areaStreaks.slice(0, 5).map(s => (
-            <div
-              key={s.area}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold"
+        {/* Header */}
+        <motion.div variants={block} className="flex items-center justify-between">
+          <div>
+            <h1
+              className="font-syne font-extrabold text-2xl tracking-tight"
               style={{
-                background: 'rgba(147,51,234,0.1)',
-                border: '1px solid rgba(147,51,234,0.2)',
-                color: '#C084FC',
+                background: 'linear-gradient(135deg, #9333EA 0%, #C9A84C 100%)',
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
               }}
             >
-              🔥 {s.area} · {s.currentStreak}d
-            </div>
-          ))}
-        </motion.div>
-      )}
-
-      {/* Career milestones bar */}
-      {data && data.career.totalMilestones > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 80, damping: 16, delay: 0.48 }}
-          className="glass-purple p-5"
-          style={{ borderRadius: '1.25rem' }}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-semibold" style={{ color: 'rgba(226,232,240,0.7)' }}>
-              Career Milestones
-            </span>
-            <span className="text-xs" style={{ color: 'rgba(226,232,240,0.4)' }}>
-              {data.career.completedMilestones}/{data.career.totalMilestones}
-            </span>
+              LifeOS
+            </h1>
+            <p className="font-inter text-xs mt-0.5" style={{ color: 'rgba(226,232,240,0.35)', letterSpacing: '0.08em' }}>
+              {new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </p>
           </div>
-          <div
-            className="h-2 rounded-full overflow-hidden"
-            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.08)' }}
-          >
-            <motion.div
-              className="h-full rounded-full"
-              style={{ background: 'linear-gradient(90deg, #6B21A8, #9333EA)' }}
-              initial={{ width: 0 }}
-              animate={{
-                width: `${Math.round((data.career.completedMilestones / data.career.totalMilestones) * 100)}%`,
+
+          {data && (
+            <div
+              className="px-3 py-1.5 rounded-xl text-xs font-black tracking-widest"
+              style={{
+                color: tierColor,
+                background: `${tierColor}15`,
+                border: `1px solid ${tierColor}40`,
+                boxShadow: `0 0 12px ${tierColor}30`,
               }}
-              transition={{ type: 'spring', stiffness: 60, damping: 14, delay: 0.5 }}
-            />
-          </div>
+            >
+              {data.brand.tier.toUpperCase()} · LV{data.brand.level}
+            </div>
+          )}
         </motion.div>
-      )}
 
-      {!data && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="glass text-center py-12"
-          style={{ borderRadius: '1.25rem', borderStyle: 'dashed' }}
-        >
-          <p className="text-2xl mb-2">🌙</p>
-          <p className="text-sm" style={{ color: 'rgba(226,232,240,0.4)' }}>
-            Backend offline — avvia l&apos;API per i dati live
-          </p>
+        {/* Streak Hero */}
+        <motion.div variants={block}>
+          <StreakHero />
         </motion.div>
-      )}
+
+        {/* XP / Aura Progress */}
+        {data && (
+          <motion.div variants={block} className="glass-purple p-5" style={{ borderRadius: '1.25rem' }}>
+            <div className="flex items-center gap-2 mb-4">
+              <Zap size={16} style={{ color: '#9333EA', filter: 'drop-shadow(0 0 6px rgba(147,51,234,0.8))' }} />
+              <span className="text-sm font-semibold" style={{ color: '#C084FC' }}>
+                Aura Progress
+              </span>
+            </div>
+            <XpBar
+              currentXp={data.brand.currentLevelXp}
+              xpToNextLevel={data.brand.xpToNextLevel}
+              level={data.brand.level}
+            />
+            <p className="text-xs mt-3" style={{ color: 'rgba(226,232,240,0.35)' }}>
+              {xpPercent}% to Level {data.brand.level + 1} · Total: {data.brand.totalXp.toLocaleString()} XP
+            </p>
+          </motion.div>
+        )}
+
+        {/* Stats Grid */}
+        <motion.div variants={block}>
+          <motion.div
+            className="grid grid-cols-2 lg:grid-cols-4 gap-3"
+            variants={gridContainer}
+            initial="hidden"
+            animate="visible"
+          >
+            <StatCard
+              icon={<Activity size={20} />}
+              label="Habits Today"
+              value={data ? `${data.habits.completedToday}/${data.habits.totalHabits}` : '—'}
+              sub={data ? `🔥 ${data.habits.longestStreak}d streak` : ''}
+              accent="#9333EA"
+            />
+            <StatCard
+              icon={<Briefcase size={20} />}
+              label="Active Goals"
+              value={data ? String(data.career.activeGoals) : '—'}
+              sub={data ? `${data.career.completedMilestones}/${data.career.totalMilestones} milestones` : ''}
+              accent="#C084FC"
+            />
+            <StatCard
+              icon={<DollarSign size={20} />}
+              label="Monthly Savings"
+              value={data ? `€${data.finance.monthlySavings.toLocaleString()}` : '—'}
+              sub={data ? `Target: €${data.finance.targetRal.toLocaleString()} RAL` : ''}
+              accent="#C9A84C"
+            />
+            <StatCard
+              icon={<FileText size={20} />}
+              label="Content Queue"
+              value={data ? String(data.content.queueSize) : '—'}
+              sub={data ? `${data.content.readyToPublish} ready` : ''}
+              accent="#F0C96E"
+            />
+          </motion.div>
+        </motion.div>
+
+        {/* Voice coaching banner */}
+        {latestCoaching && (
+          <motion.div variants={block} className="glass-purple p-5" style={{ borderRadius: '1.25rem' }}>
+            <div className="flex items-center gap-2 mb-2">
+              <Mic size={14} style={{ color: '#9333EA' }} />
+              <span className="text-xs font-semibold tracking-widest uppercase" style={{ color: 'rgba(192,132,252,0.7)' }}>
+                Voice Coach
+              </span>
+            </div>
+            <p className="text-sm font-inter leading-relaxed" style={{ color: 'rgba(226,232,240,0.75)' }}>
+              {latestCoaching}
+            </p>
+          </motion.div>
+        )}
+
+        {/* Area streaks */}
+        {areaStreaks.length > 0 && (
+          <motion.div variants={block} className="flex gap-2 flex-wrap">
+            {areaStreaks.slice(0, 5).map(s => (
+              <div
+                key={s.area}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold"
+                style={{
+                  background: 'rgba(147,51,234,0.1)',
+                  border: '1px solid rgba(147,51,234,0.2)',
+                  color: '#C084FC',
+                }}
+              >
+                🔥 {s.area} · {s.currentStreak}d
+              </div>
+            ))}
+          </motion.div>
+        )}
+
+        {/* Career milestones bar */}
+        {data && data.career.totalMilestones > 0 && (
+          <motion.div variants={block} className="glass-purple p-5" style={{ borderRadius: '1.25rem' }}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-semibold" style={{ color: 'rgba(226,232,240,0.7)' }}>
+                Career Milestones
+              </span>
+              <span className="text-xs" style={{ color: 'rgba(226,232,240,0.4)' }}>
+                {data.career.completedMilestones}/{data.career.totalMilestones}
+              </span>
+            </div>
+            <div
+              className="h-2 rounded-full overflow-hidden"
+              style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.08)' }}
+            >
+              <motion.div
+                className="h-full rounded-full"
+                style={{ background: 'linear-gradient(90deg, #6B21A8, #9333EA)' }}
+                initial={{ width: 0 }}
+                animate={{
+                  width: `${Math.round((data.career.completedMilestones / data.career.totalMilestones) * 100)}%`,
+                }}
+                transition={{ type: 'spring', stiffness: 60, damping: 14, delay: 0.5 }}
+              />
+            </div>
+          </motion.div>
+        )}
+
+        {!data && (
+          <motion.div
+            variants={block}
+            className="glass text-center py-12"
+            style={{ borderRadius: '1.25rem', borderStyle: 'dashed' }}
+          >
+            <p className="text-2xl mb-2">🌙</p>
+            <p className="text-sm" style={{ color: 'rgba(226,232,240,0.4)' }}>
+              Backend offline — avvia l&apos;API per i dati live
+            </p>
+          </motion.div>
+        )}
+      </motion.div>
     </div>
   );
 }

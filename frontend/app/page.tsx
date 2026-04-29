@@ -19,15 +19,22 @@ async function getDashboard() {
     });
     if (!res.ok) return null;
     const raw = await res.json();
+    const level    = raw.brand?.globalLevel ?? raw.brand?.GlobalLevel ?? raw.brand?.level ?? 1;
+    const totalXp  = raw.brand?.totalXp ?? raw.brand?.TotalXp ?? 0;
+    // Calculate XP within the current level (same formula as backend XpCalculatorService)
+    const xpPerLevel = (l: number) => Math.floor(1000 * Math.pow(1.15, l - 1));
+    let accumulated = 0;
+    for (let l = 1; l < level; l++) accumulated += xpPerLevel(l);
+    const currentLevelXp = Math.max(0, totalXp - accumulated);
     // Normalise to camelCase for DashboardClient
     return {
       brand: {
         codename:       raw.brand?.codename       ?? raw.brand?.Codename       ?? '—',
-        level:          raw.brand?.globalLevel     ?? raw.brand?.GlobalLevel    ?? raw.brand?.level ?? 1,
+        level,
         tier:           raw.brand?.tier            ?? raw.brand?.Tier           ?? 'bronze',
-        totalXp:        raw.brand?.totalXp         ?? raw.brand?.TotalXp        ?? 0,
+        totalXp,
         xpToNextLevel:  raw.brand?.xpToNextLevel   ?? raw.brand?.XpToNextLevel  ?? 1000,
-        currentLevelXp: raw.brand?.currentLevelXp  ?? raw.brand?.CurrentLevelXp ?? 0,
+        currentLevelXp,
       },
       habits: {
         totalHabits:    raw.habits?.totalHabits   ?? raw.habits?.TotalHabits   ?? 0,
