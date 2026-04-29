@@ -140,21 +140,40 @@ export interface FloatReward {
   icon: string;
   label: string;
   color: string;
-  x: number; // percentage (0-100) horizontal position
+  x: number;
+  domain?: string;      // e.g. "habits", "career", "content"
+  isTaskDone?: boolean; // x2 XP multiplier
+  xpBase?: number;      // raw XP before multiplier
+  action?: string;      // human-readable action name
 }
 
 interface XpFloaterStore {
   rewards: FloatReward[];
+  momentumCount: number;
+  lastXpAt: number;
   triggerRewards: (rewards: FloatReward[]) => void;
   removeReward: (id: string) => void;
+  incrementMomentum: () => void;
+  resetMomentum: () => void;
 }
 
-export const useXpFloaterStore = create<XpFloaterStore>((set) => ({
+const MOMENTUM_WINDOW_MS = 30_000; // 30s between XP events to sustain momentum
+
+export const useXpFloaterStore = create<XpFloaterStore>((set, get) => ({
   rewards: [],
+  momentumCount: 0,
+  lastXpAt: 0,
   triggerRewards: (newRewards) =>
     set((s) => ({ rewards: [...s.rewards, ...newRewards] })),
   removeReward: (id) =>
     set((s) => ({ rewards: s.rewards.filter((r) => r.id !== id) })),
+  incrementMomentum: () => {
+    const now = Date.now();
+    const { lastXpAt, momentumCount } = get();
+    const sustained = now - lastXpAt < MOMENTUM_WINDOW_MS;
+    set({ momentumCount: sustained ? momentumCount + 1 : 1, lastXpAt: now });
+  },
+  resetMomentum: () => set({ momentumCount: 0, lastXpAt: 0 }),
 }));
 
 // ── XP persistence store ───────────────────────────────────────────────────

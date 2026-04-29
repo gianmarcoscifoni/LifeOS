@@ -3,13 +3,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Briefcase, Activity, DollarSign,
-  Zap, FileText, BookOpen, Bot, Heart, Star, Mail,
-  LogIn, LogOut, X, Menu,
+  Zap, FileText, BookOpen, Bot, Heart, Star,
+  LogIn, LogOut, X, Menu, Camera,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSession, signIn, signOut } from 'next-auth/react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { usePathname as usePN } from 'next/navigation';
 
 const navItems = [
@@ -23,7 +23,6 @@ const navItems = [
   { href: '/career',     label: 'Career',         icon: Briefcase },
   { href: '/journal',    label: 'Journal',        icon: BookOpen },
   { href: '/claude',     label: 'Ask Claude',     icon: Bot },
-  { href: '/gmail',      label: 'Inbox Intel',    icon: Mail },
 ];
 
 const ACCENT: Record<string, string> = {
@@ -33,6 +32,30 @@ const ACCENT: Record<string, string> = {
 
 function UserRow() {
   const { data: session, status } = useSession();
+  const [customPhoto, setCustomPhoto] = useState<string | null>(null);
+  const [hovering, setHovering] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('lo_avatar');
+    if (saved) setCustomPhoto(saved);
+  }, []);
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const b64 = ev.target?.result as string;
+      localStorage.setItem('lo_avatar', b64);
+      setCustomPhoto(b64);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  const avatarSrc = customPhoto ?? session?.user?.image ?? null;
+  const initials  = session?.user?.name?.[0]?.toUpperCase() ?? 'G';
+
   if (status === 'loading') return null;
   if (!session) {
     return (
@@ -46,22 +69,42 @@ function UserRow() {
       </button>
     );
   }
+
   return (
     <div className="flex items-center gap-2.5 px-2 py-1.5">
-      {session.user?.image ? (
-        <img src={session.user.image} alt="" className="w-7 h-7 rounded-full flex-shrink-0"
-          style={{ border: '1.5px solid rgba(147,51,234,0.4)' }} />
-      ) : (
-        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
-          style={{ background: 'rgba(147,51,234,0.2)', color: '#9333EA' }}>
-          {session.user?.name?.[0]?.toUpperCase() ?? 'G'}
-        </div>
-      )}
+      {/* Clickable avatar with upload overlay */}
+      <button
+        className="relative flex-shrink-0 w-8 h-8 rounded-full overflow-hidden"
+        style={{ border: '1.5px solid rgba(147,51,234,0.4)' }}
+        onClick={() => fileRef.current?.click()}
+        onMouseEnter={() => setHovering(true)}
+        onMouseLeave={() => setHovering(false)}
+        title="Upload photo"
+      >
+        {avatarSrc ? (
+          <img src={avatarSrc} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-[10px] font-bold"
+            style={{ background: 'rgba(147,51,234,0.2)', color: '#9333EA' }}>
+            {initials}
+          </div>
+        )}
+        {hovering && (
+          <div className="absolute inset-0 flex items-center justify-center"
+            style={{ background: 'rgba(0,0,0,0.55)' }}>
+            <Camera size={12} style={{ color: 'rgba(226,232,240,0.8)' }} />
+          </div>
+        )}
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+      </button>
+
       <div className="flex-1 min-w-0">
         <p className="font-inter text-[11px] font-medium truncate" style={{ color: 'rgba(226,232,240,0.7)' }}>
           {session.user?.name ?? 'User'}
         </p>
-        <p className="font-inter text-[10px] truncate" style={{ color: 'rgba(226,232,240,0.25)' }}>Gmail connected</p>
+        <p className="font-inter text-[10px] truncate" style={{ color: 'rgba(226,232,240,0.25)' }}>
+          {customPhoto ? 'Custom photo' : 'Google account'}
+        </p>
       </div>
       <button onClick={() => signOut()} className="p-1 rounded-lg transition-colors hover:bg-white/5" title="Sign out">
         <LogOut size={12} style={{ color: 'rgba(226,232,240,0.25)' }} />

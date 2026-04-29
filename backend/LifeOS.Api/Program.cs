@@ -81,6 +81,7 @@ try
     app.MapJournalEndpoints();
     app.MapClaudeEndpoints();
     app.MapDashboardEndpoints();
+    app.MapXpEndpoints();
 
     app.Run();
 }
