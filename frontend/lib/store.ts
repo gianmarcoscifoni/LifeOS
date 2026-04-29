@@ -251,6 +251,7 @@ interface VoiceAssistantStore {
   liveTranscript: string;
   particleBurst: ParticleBurst | null;
   pendingNavigation: string | null;
+  interactionCount: number;
 
   openVoice: () => void;
   closeVoice: () => void;
@@ -263,7 +264,13 @@ interface VoiceAssistantStore {
   triggerParticleBurst: (burst: ParticleBurst) => void;
   clearParticleBurst: () => void;
   setPendingNavigation: (path: string | null) => void;
+  incrementInteractionCount: () => void;
 }
+
+const _getInteractionCount = () => {
+  if (typeof window === 'undefined') return 0;
+  return parseInt(localStorage.getItem('lo_interaction_count') ?? '0', 10);
+};
 
 export const useVoiceAssistantStore = create<VoiceAssistantStore>((set) => ({
   isOpen: false,
@@ -274,6 +281,7 @@ export const useVoiceAssistantStore = create<VoiceAssistantStore>((set) => ({
   liveTranscript: '',
   particleBurst: null,
   pendingNavigation: null,
+  interactionCount: _getInteractionCount(),
 
   openVoice: () => set({ isOpen: true }),
   closeVoice: () => set({ isOpen: false, phase: 'idle', activeDomain: null, liveTranscript: '', activeScript: null, particleBurst: null, pendingNavigation: null }),
@@ -286,4 +294,9 @@ export const useVoiceAssistantStore = create<VoiceAssistantStore>((set) => ({
   triggerParticleBurst: (particleBurst) => set({ particleBurst }),
   clearParticleBurst: () => set({ particleBurst: null }),
   setPendingNavigation: (pendingNavigation) => set({ pendingNavigation }),
+  incrementInteractionCount: () => set((s) => {
+    const next = s.interactionCount + 1;
+    if (typeof window !== 'undefined') localStorage.setItem('lo_interaction_count', String(next));
+    return { interactionCount: next };
+  }),
 }));

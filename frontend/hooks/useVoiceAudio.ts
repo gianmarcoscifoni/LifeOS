@@ -41,7 +41,7 @@ declare global {
 
 const WAVEFORM_BARS = 48;
 /** After a final result, if silence lasts this long → auto-send */
-const AUTO_SEND_PAUSE_MS = 2000;
+const AUTO_SEND_PAUSE_MS = 5000;
 
 export interface UseVoiceAudioOptions {
   onTranscriptReady: (text: string) => void;
@@ -60,6 +60,14 @@ export interface UseVoiceAudioReturn {
   cancelSpeech: () => void;
   /** True while a recording session is active */
   isListening: boolean;
+  /** 0–1 countdown to auto-send after silence (0 = not counting) */
+  silenceProgress: number;
+  /** 0–1 current microphone amplitude (even during speaking phase when ambient monitor is on) */
+  audioLevel: number;
+  /** Start microphone analyser without speech recognition (for VAD during TTS) */
+  startAmbientMonitor: () => void;
+  /** Stop ambient analyser (only when not actively recording) */
+  stopAmbientMonitor: () => void;
 }
 
 export function useVoiceAudio({
@@ -67,12 +75,12 @@ export function useVoiceAudio({
   onInterim,
   onError,
 }: UseVoiceAudioOptions): UseVoiceAudioReturn {
-  const [bars, setBars]         = useState<number[]>(Array(WAVEFORM_BARS).fill(2));
-  const [supported, setSupported] = useState(true);
+  const [bars, setBars]             = useState<number[]>(Array(WAVEFORM_BARS).fill(2));
+  const [supported, setSupported]   = useState(true);
   const [recogError, setRecogError] = useState<string | null>(null);
-  const [isListening, setIsListening] = useState(false);
+  const [isListening, setIsListening]   = useState(false);
+  const [silenceProgress, setSilenceProgress] = useState(0);
 
-  // Refs — never trigger re-renders
   const recogRef    = useRef<SpeechRecognitionInstance | null>(null);
   const synthRef    = useRef<SpeechSynthesis | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -80,14 +88,13 @@ export function useVoiceAudio({
   const streamRef   = useRef<MediaStream | null>(null);
   const animRef     = useRef<number>(0);
 
-  /** Accumulated final transcript text for the current session */
-  const accRef      = useRef('');
-  /** True while the user intends to keep recording */
-  const activeRef   = useRef(false);
-  /** Timer handle for auto-send after silence */
-  const silenceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const accRef     = useRef('');
+  const activeRef  = useRef(false);
+  const silenceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const silenceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const silenceStartRef    = useRef<number>(0);
+  const barsRef = useRef<number[]>(Array(WAVEFORM_BARS).fill(2));
 
-  // Stable callback refs — updated every render, safe to call from stale closures
   const onReadyRef   = useRef(onTranscriptReady);
   const onInterimRef = useRef(onInterim);
   const onErrorRef   = useRef(onError);
@@ -95,15 +102,32 @@ export function useVoiceAudio({
   useEffect(() => { onInterimRef.current = onInterim; },        [onInterim]);
   useEffect(() => { onErrorRef.current   = onError; },          [onError]);
 
-  // ── Helper: flush accumulated text and end the session ──────────────────
-
-  function doFlush() {
+  function clearSilenceTimer() {
     if (silenceRef.current) { clearTimeout(silenceRef.current); silenceRef.current = null; }
-    activeRef.current = false;        // tell onend to send, not restart
-    recogRef.current?.stop();         // → fires onend
+    if (silenceIntervalRef.current) { clearInterval(silenceIntervalRef.current); silenceIntervalRef.current = null; }
+    setSilenceProgress(0);
   }
 
-  // ── Helper: stop the audio-analysis stream + animation ──────────────────
+  function armSilenceTimer() {
+    clearSilenceTimer();
+    if (!activeRef.current) return;
+    silenceStartRef.current = Date.now();
+    silenceRef.current = setTimeout(doFlush, AUTO_SEND_PAUSE_MS);
+    silenceIntervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - silenceStartRef.current;
+      setSilenceProgress(Math.min(1, elapsed / AUTO_SEND_PAUSE_MS));
+      if (elapsed >= AUTO_SEND_PAUSE_MS) {
+        clearInterval(silenceIntervalRef.current!);
+        silenceIntervalRef.current = null;
+      }
+    }, 80);
+  }
+
+  function doFlush() {
+    clearSilenceTimer();
+    activeRef.current = false;
+    recogRef.current?.stop();
+  }
 
   function stopAnalysis() {
     cancelAnimationFrame(animRef.current);
@@ -112,46 +136,37 @@ export function useVoiceAudio({
     analyserRef.current = null;
     streamRef.current   = null;
     audioCtxRef.current = null;
+    barsRef.current = Array(WAVEFORM_BARS).fill(2);
     setBars(Array(WAVEFORM_BARS).fill(2));
   }
-
-  // ── Setup SpeechRecognition once on mount ────────────────────────────────
 
   useEffect(() => {
     const SR = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!SR) { setSupported(false); return; }
 
     const r = new SR();
-    r.lang            = 'en-US';
-    r.interimResults  = true;
-    r.continuous      = true;
+    r.lang           = 'en-US';
+    r.interimResults = true;
+    r.continuous     = true;
 
     r.onresult = (e: SpeechRecognitionEvent) => {
       let interim = '';
-
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const res = e.results[i];
         if (res.isFinal) {
           accRef.current += (accRef.current ? ' ' : '') + res[0].transcript.trim();
-          // Re-arm silence timer after every final chunk
-          if (silenceRef.current) clearTimeout(silenceRef.current);
-          if (activeRef.current) {
-            silenceRef.current = setTimeout(doFlush, AUTO_SEND_PAUSE_MS);
-          }
+          armSilenceTimer();
         } else {
           interim += res[0].transcript;
         }
       }
-
-      // Live display: finals + current interim
-      const live = accRef.current
-        + (interim ? (accRef.current ? ' ' : '') + interim : '');
+      const live = accRef.current + (interim ? (accRef.current ? ' ' : '') + interim : '');
       onInterimRef.current(live);
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (r as any).onerror = (e: { error: string }) => {
-      if (e.error === 'no-speech' || e.error === 'aborted') return; // normal lifecycle
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
       console.warn('[SpeechRecognition] error:', e.error);
       setRecogError(e.error);
       onErrorRef.current?.(e.error);
@@ -162,13 +177,12 @@ export function useVoiceAudio({
 
     r.onend = () => {
       if (activeRef.current) {
-        // Still recording — restart to keep continuous session alive
         try { r.start(); } catch { /* already starting */ }
         return;
       }
-      // Session ended intentionally — emit accumulated text
       stopAnalysis();
       setIsListening(false);
+      clearSilenceTimer();
       const full = accRef.current.trim();
       accRef.current = '';
       if (full.length > 0) onReadyRef.current(full);
@@ -179,15 +193,13 @@ export function useVoiceAudio({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Audio analysis for waveform bars ─────────────────────────────────────
-
   async function startAnalysis() {
+    if (analyserRef.current) return; // already running
     try {
-      // Prefer built-in/internal mic over USB/Bluetooth
       let deviceId: string | undefined;
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
-        const mics = devices.filter(d => d.kind === 'audioinput');
+        const mics    = devices.filter(d => d.kind === 'audioinput');
         const builtin = mics.find(d =>
           /built.?in|internal|microfono integrato|macbook|integrated/i.test(d.label)
         );
@@ -198,7 +210,7 @@ export function useVoiceAudio({
         audio: deviceId ? { deviceId: { exact: deviceId } } : true,
       });
       streamRef.current = stream;
-      const ctx = new AudioContext();
+      const ctx      = new AudioContext();
       audioCtxRef.current = ctx;
       const src      = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
@@ -207,25 +219,25 @@ export function useVoiceAudio({
       src.connect(analyser);
       analyserRef.current = analyser;
       animateBars();
-    } catch { /* mic blocked — recognition still works via its own stream */ }
+    } catch { /* mic blocked */ }
   }
 
   function animateBars() {
     if (!analyserRef.current) return;
     const data = new Uint8Array(analyserRef.current.frequencyBinCount);
     analyserRef.current.getByteFrequencyData(data);
-    setBars(Array.from({ length: WAVEFORM_BARS }, (_, i) => {
+    const next = Array.from({ length: WAVEFORM_BARS }, (_, i) => {
       const val = data[Math.floor((i / WAVEFORM_BARS) * data.length)] ?? 0;
       return Math.max(2, (val / 255) * 60);
-    }));
+    });
+    barsRef.current = next;
+    setBars(next);
     animRef.current = requestAnimationFrame(animateBars);
   }
 
-  // ── Public API ────────────────────────────────────────────────────────────
-
   const startListening = useCallback(() => {
     if (!recogRef.current) return;
-    if (silenceRef.current) { clearTimeout(silenceRef.current); silenceRef.current = null; }
+    clearSilenceTimer();
     accRef.current    = '';
     activeRef.current = true;
     setRecogError(null);
@@ -235,15 +247,13 @@ export function useVoiceAudio({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Manual stop — sends whatever was accumulated */
   const stopListening = useCallback(() => {
     doFlush();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Hard cancel — nothing is sent */
   const stopAll = useCallback(() => {
-    if (silenceRef.current) { clearTimeout(silenceRef.current); silenceRef.current = null; }
+    clearSilenceTimer();
     activeRef.current = false;
     accRef.current    = '';
     setIsListening(false);
@@ -253,7 +263,16 @@ export function useVoiceAudio({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Preferred female English voices in priority order (Apple + Google)
+  const startAmbientMonitor = useCallback(() => {
+    startAnalysis();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const stopAmbientMonitor = useCallback(() => {
+    if (!activeRef.current) stopAnalysis();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const FEMALE_VOICES = ['Samantha', 'Ava', 'Allison', 'Victoria', 'Karen', 'Moira', 'Fiona', 'Tessa', 'Zoe', 'Susan'];
 
   const speak = useCallback((text: string, onEnd?: () => void) => {
@@ -263,26 +282,27 @@ export function useVoiceAudio({
     utt.lang   = 'en-US';
     utt.rate   = 1.0;
     utt.pitch  = 1.05;
-
-    const voices   = synthRef.current.getVoices();
-    const enVoices = voices.filter(v => v.lang.startsWith('en'));
-    // Pick the first preferred female voice available
+    const voices    = synthRef.current.getVoices();
+    const enVoices  = voices.filter(v => v.lang.startsWith('en'));
     const femaleVoice = FEMALE_VOICES.reduce<SpeechSynthesisVoice | null>(
       (found, name) => found ?? (enVoices.find(v => v.name.includes(name)) ?? null),
       null,
     );
     const selected = femaleVoice ?? enVoices.find(v => v.default) ?? enVoices[0];
     if (selected) utt.voice = selected;
-
     utt.onend = () => onEnd?.();
     synthRef.current.speak(utt);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const cancelSpeech = useCallback(() => { synthRef.current?.cancel(); }, []);
 
+  // Compute audioLevel from current bars (0-1)
+  const audioLevel = barsRef.current.reduce((s, b) => s + b, 0) / WAVEFORM_BARS / 60;
+
   return {
-    bars, supported, recogError, isListening,
+    bars, supported, recogError, isListening, silenceProgress, audioLevel,
     startListening, stopListening, stopAll, speak, cancelSpeech,
+    startAmbientMonitor, stopAmbientMonitor,
   };
 }

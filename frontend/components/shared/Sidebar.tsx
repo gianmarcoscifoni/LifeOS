@@ -73,30 +73,33 @@ function UserRow() {
   return (
     <div className="flex items-center gap-2.5 px-2 py-1.5">
       {/* Clickable avatar with upload overlay */}
-      <button
-        className="relative flex-shrink-0 w-8 h-8 rounded-full overflow-hidden"
-        style={{ border: '1.5px solid rgba(147,51,234,0.4)' }}
-        onClick={() => fileRef.current?.click()}
-        onMouseEnter={() => setHovering(true)}
-        onMouseLeave={() => setHovering(false)}
-        title="Upload photo"
-      >
-        {avatarSrc ? (
-          <img src={avatarSrc} alt="" className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-[10px] font-bold"
-            style={{ background: 'rgba(147,51,234,0.2)', color: '#9333EA' }}>
-            {initials}
-          </div>
-        )}
-        {hovering && (
-          <div className="absolute inset-0 flex items-center justify-center"
-            style={{ background: 'rgba(0,0,0,0.55)' }}>
-            <Camera size={12} style={{ color: 'rgba(226,232,240,0.8)' }} />
-          </div>
-        )}
+      <div className="relative flex-shrink-0">
+        <button
+          className="relative w-8 h-8 rounded-full overflow-hidden block"
+          style={{ border: '1.5px solid rgba(147,51,234,0.4)' }}
+          onClick={() => fileRef.current?.click()}
+          onMouseEnter={() => setHovering(true)}
+          onMouseLeave={() => setHovering(false)}
+          title="Upload photo"
+          type="button"
+        >
+          {avatarSrc ? (
+            <img src={avatarSrc} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-[10px] font-bold"
+              style={{ background: 'rgba(147,51,234,0.2)', color: '#9333EA' }}>
+              {initials}
+            </div>
+          )}
+          {hovering && (
+            <div className="absolute inset-0 flex items-center justify-center"
+              style={{ background: 'rgba(0,0,0,0.55)' }}>
+              <Camera size={12} style={{ color: 'rgba(226,232,240,0.8)' }} />
+            </div>
+          )}
+        </button>
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-      </button>
+      </div>
 
       <div className="flex-1 min-w-0">
         <p className="font-inter text-[11px] font-medium truncate" style={{ color: 'rgba(226,232,240,0.7)' }}>
