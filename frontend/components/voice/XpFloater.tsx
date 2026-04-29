@@ -37,7 +37,7 @@ async function saveXpToDb(reward: FloatReward, finalXp: number) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        action:     reward.action ?? reward.label.replace(/^\+\d+\s*XP\s*/i, '') || 'Action',
+        action:     (reward.action ?? reward.label.replace(/^\+\d+\s*XP\s*/i, '')) || 'Action',
         domain:     reward.domain ?? 'general',
         xp_base:    reward.xpBase ?? finalXp,
         is_task_done: reward.isTaskDone ?? false,
