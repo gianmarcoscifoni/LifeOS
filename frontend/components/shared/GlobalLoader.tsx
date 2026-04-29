@@ -64,7 +64,7 @@ export function GlobalLoader() {
         <h1
           className="font-syne font-black tracking-tight"
           style={{
-            fontSize: 'clamp(4.5rem, 14vw, 8rem)',
+            fontSize: 'clamp(3rem, 9vw, 5.5rem)',
             letterSpacing: '-0.035em',
             lineHeight: 1,
             background: 'linear-gradient(135deg, #9333EA 0%, #C084FC 45%, #C9A84C 100%)',
