@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, type Transition } from 'framer-motion';
 
 type B4 = [number, number, number, number];
 const EXPO_OUT: B4  = [0.22, 1, 0.36, 1];
@@ -46,10 +46,10 @@ function CosmicEffect({ exiting }: { exiting: boolean }) {
           }}
           initial={{ scale: 0.5, opacity: 0 }}
           animate={exiting ? { scale: 2.5, opacity: 0 } : { scale: 1, opacity: 1 }}
-          transition={exiting
+          transition={(exiting
             ? { duration: 0.45 }
-            : { type: 'spring' as const, stiffness: 70 - i * 10, damping: 18, delay: 0.2 + i * 0.1 }
-          }
+            : { type: 'spring', stiffness: 70 - i * 10, damping: 18, delay: 0.2 + i * 0.1 }
+          ) as Transition}
         />
       ))}
       {PARTICLES.map((p, i) => (
@@ -251,7 +251,7 @@ function WarpEffect({ exiting }: { exiting: boolean }) {
 
 // ─── Logo (shared) ─────────────────────────────────────────────────────────
 function LogoBlock({ exiting, variant }: { exiting: boolean; variant: number }) {
-  const springIn = { type: 'spring' as const as const, stiffness: 160, damping: 22, delay: variant === 2 ? 0.35 : 0.18 };
+  const springIn: Transition = { type: 'spring', stiffness: 160, damping: 22, delay: variant === 2 ? 0.35 : 0.18 };
   return (
     <motion.div
       className="relative flex flex-col items-center gap-3"
