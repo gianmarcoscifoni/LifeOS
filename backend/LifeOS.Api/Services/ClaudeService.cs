@@ -406,60 +406,63 @@ public class ClaudeService(
         return response;
     }
 
-    // Lean "caveman DB" context — raw facts, minimal tokens (~150-200 vs 600+ JSON)
+    // Lean "caveman DB" context — live snapshot + historical memory, minimal tokens
     private async Task<string> BuildContext()
     {
-        var profile = await db.BrandProfiles
-            .Include(p => p.SkillTrees)
-            .FirstOrDefaultAsync();
-
-        var goals = await db.Goals
-            .Where(g => g.Status == "in_progress")
-            .Take(5)
-            .Select(g => g.Title)
-            .ToListAsync();
-
-        var habits = await db.Habits
-            .Where(h => h.Active)
-            .Select(h => new { h.Name, h.StreakCurrent })
-            .ToListAsync();
-
+        var profile = await db.BrandProfiles.Include(p => p.SkillTrees).FirstOrDefaultAsync();
+        var goals   = await db.Goals.Where(g => g.Status == "in_progress").Take(5).Select(g => g.Title).ToListAsync();
+        var habits  = await db.Habits.Where(h => h.Active).Select(h => new { h.Name, h.StreakCurrent }).ToListAsync();
         var finance = await db.Finances.FirstOrDefaultAsync();
+        var streak  = await db.DailyCheckins.OrderByDescending(c => c.Date).Select(c => c.StreakDay).FirstOrDefaultAsync();
+        var lastMood = await db.JournalEntries.OrderByDescending(j => j.CreatedAt).Select(j => j.Mood).FirstOrDefaultAsync();
+        var contentCount = await db.ContentQueue.CountAsync(c => c.Status == "idea" || c.Status == "ready");
 
-        var streak = await db.DailyCheckins
-            .OrderByDescending(c => c.Date)
-            .Select(c => c.StreakDay)
-            .FirstOrDefaultAsync();
-
-        var lastMood = await db.JournalEntries
-            .OrderByDescending(j => j.CreatedAt)
-            .Select(j => j.Mood)
-            .FirstOrDefaultAsync();
-
-        var contentCount = await db.ContentQueue
-            .CountAsync(c => c.Status == "idea" || c.Status == "ready");
+        // Historical memory: top 20 facts by importance desc, then oldest first (chronological narrative)
+        var memories = await db.ContextMemories
+            .OrderByDescending(m => m.Importance)
+            .ThenBy(m => m.CreatedAt)
+            .Take(20)
+            .Select(m => new { m.Category, m.Fact, m.CreatedAt })
+            .ToListAsync();
 
         var lines = new System.Text.StringBuilder();
         lines.AppendLine("=== GIANMARCO SCIFONI — LIFEOS ===");
         if (profile != null)
         {
             lines.AppendLine($"BRAND: {profile.Codename} | LV{profile.GlobalLevel} {profile.Tier.ToUpper()} | {profile.TotalXp:N0}XP | {profile.Title}");
-            lines.AppendLine($"MISSION: Italy's #1 tech personal brand. Land €120k+ RAL. Build sovereign engineer identity.");
+            lines.AppendLine("MISSION: Italy's #1 tech personal brand. Land €120k+ RAL. Build sovereign engineer identity.");
             if (profile.SkillTrees.Any())
                 lines.AppendLine($"TREES: {string.Join(", ", profile.SkillTrees.Select(t => $"{t.Name}(LV{t.TreeLevel})"))}");
         }
-        if (goals.Any())
-            lines.AppendLine($"ACTIVE_GOALS: {string.Join(" | ", goals)}");
-        if (habits.Any())
-            lines.AppendLine($"HABITS: {string.Join(", ", habits.Select(h => $"{h.Name}({h.StreakCurrent}d)"))}");
-        if (finance != null)
-            lines.AppendLine($"FINANCE: RAL €{finance.CurrentRal:N0}→€{finance.TargetRal:N0} | savings €{finance.Savings:N0}/mo");
+        if (goals.Any())   lines.AppendLine($"ACTIVE_GOALS: {string.Join(" | ", goals)}");
+        if (habits.Any())  lines.AppendLine($"HABITS: {string.Join(", ", habits.Select(h => $"{h.Name}({h.StreakCurrent}d)"))}");
+        if (finance != null) lines.AppendLine($"FINANCE: RAL €{finance.CurrentRal:N0}→€{finance.TargetRal:N0} | savings €{finance.Savings:N0}/mo");
         lines.AppendLine($"STREAK: {streak}d daily | CONTENT_QUEUE: {contentCount} items");
-        if (!string.IsNullOrEmpty(lastMood))
-            lines.AppendLine($"MOOD: {lastMood}");
+        if (!string.IsNullOrEmpty(lastMood)) lines.AppendLine($"MOOD: {lastMood}");
+
+        // Historical memory log — builds chronologically
+        if (memories.Any())
+        {
+            lines.AppendLine("MEMORY_LOG:");
+            foreach (var m in memories.OrderBy(m => m.CreatedAt))
+                lines.AppendLine($"  [{m.CreatedAt:yyyy-MM-dd}][{m.Category.ToUpper()}] {m.Fact}");
+        }
         lines.AppendLine("===");
 
         return lines.ToString();
+    }
+
+    // Call this from endpoints to persist key facts into the memory log
+    public async Task RecordMemory(string category, string fact, int importance = 3)
+    {
+        db.ContextMemories.Add(new Models.ContextMemory
+        {
+            Category  = category,
+            Fact      = fact,
+            Importance = importance,
+            CreatedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
     }
 
     private async Task<string> BuildWeeklySummary()

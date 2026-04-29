@@ -38,6 +38,7 @@ public class LifeOsDbContext(DbContextOptions<LifeOsDbContext> options) : DbCont
     public DbSet<Interview> Interviews => Set<Interview>();
     public DbSet<InterviewQA> InterviewQAs => Set<InterviewQA>();
     public DbSet<DailyCheckin> DailyCheckins => Set<DailyCheckin>();
+    public DbSet<ContextMemory> ContextMemories => Set<ContextMemory>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {

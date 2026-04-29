@@ -648,304 +648,261 @@ export function VoiceAssistant() {
     <>
       <AnimatePresence>
         {isOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.22 }}
-            className="fixed inset-0 z-50 flex flex-col overflow-hidden"
-            style={{ background: 'rgba(5,2,16,0.96)', backdropFilter: 'blur(32px)' }}
-          >
-            {/* Domain ambient glow */}
-            {activeDomain && (
+          <>
+            {/* Dim backdrop — does NOT cover everything, just darkens behind panel */}
+            <motion.div
+              key="va-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-[49]"
+              style={{ background: 'rgba(5,2,16,0.55)', backdropFilter: 'blur(6px)' }}
+              onClick={() => { stopAll(); closeVoice(); }}
+            />
+
+            {/* Compact bottom panel — slides up */}
+            <motion.div
+              key="va-panel"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 320, damping: 34 }}
+              className="fixed bottom-0 left-0 right-0 z-50 flex flex-col overflow-hidden"
+              style={{
+                height: 'min(520px, 72vh)',
+                background: 'rgba(8,3,20,0.97)',
+                borderTop: `1px solid ${stateColor}30`,
+                borderRadius: '24px 24px 0 0',
+                boxShadow: `0 -8px 60px rgba(0,0,0,0.6), 0 -2px 0 ${stateColor}20`,
+              }}
+            >
+              {/* Domain ambient glow inside panel */}
               <motion.div
-                className="absolute pointer-events-none"
-                style={{
-                  top: '30%', left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: 600, height: 600, borderRadius: '50%',
-                  background: `radial-gradient(circle, ${domainColor}22 0%, transparent 70%)`,
-                  filter: 'blur(80px)',
-                }}
-                animate={{ opacity: [0.1, 0.2, 0.1] }}
+                className="absolute inset-0 pointer-events-none rounded-[24px]"
+                style={{ background: `radial-gradient(ellipse at 50% 0%, ${domainColor}12 0%, transparent 65%)` }}
+                animate={{ opacity: [0.6, 1, 0.6] }}
                 transition={{ duration: 4, repeat: Infinity }}
               />
-            )}
-            <AmbientParticles color={domainColor} />
-            {particleBurst && (
-              <BurstParticles color={particleBurst.color} onDone={clearParticleBurst} />
-            )}
 
-            {/* ── Top bar ── */}
-            <div className="relative z-10 flex items-center justify-between px-5 py-4 flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <motion.span
-                  className="inline-block w-1.5 h-1.5 rounded-full"
-                  style={{ background: stateColor }}
-                  animate={{
-                    opacity: isActivePhase ? [1, 0.3, 1] : 1,
-                    scale:   isActivePhase ? [1, 1.3, 1] : 1,
-                  }}
-                  transition={{ duration: 1.1, repeat: isActivePhase ? Infinity : 0 }}
-                />
-                <span
-                  className="text-xs font-inter font-semibold tracking-widest uppercase"
-                  style={{ color: stateColor, opacity: 0.82 }}
-                >
-                  {PHASE_LABELS[phase]}
-                </span>
-              </div>
-              <button
-                onClick={() => { stopAll(); closeVoice(); }}
-                className="w-8 h-8 rounded-full flex items-center justify-center"
-                style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(226,232,240,0.45)' }}
-              >
-                <X size={14} />
-              </button>
-            </div>
+              {particleBurst && (
+                <BurstParticles color={particleBurst.color} onDone={clearParticleBurst} />
+              )}
 
-            {/* ── Orb section ── */}
-            <div className="relative flex items-center justify-center py-3 flex-shrink-0">
-              <div className="relative flex items-center justify-center" style={{ width: 170, height: 170 }}>
+              {/* ── Header row ── */}
+              <div className="relative z-10 flex items-center gap-3 px-4 pt-3 pb-2 flex-shrink-0">
+                {/* Drag handle */}
+                <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full"
+                  style={{ background: 'rgba(255,255,255,0.12)' }} />
 
-                {/* Ripple rings */}
-                {isActivePhase && [1, 2].map(i => (
-                  <motion.div
-                    key={i}
-                    className="absolute rounded-full"
-                    style={{ inset: 0, border: `1px solid ${stateColor}` }}
-                    animate={{ scale: [1, 1 + i * 0.48], opacity: [0.35, 0] }}
-                    transition={{ duration: 2.8, delay: i * 0.75, repeat: Infinity, ease: 'easeOut' }}
-                  />
-                ))}
-
-                {/* Radial waveform */}
-                <RadialWaveform bars={bars} color={stateColor} active={isActivePhase} />
-
-                {/* Apple-style orb — frosted glass */}
+                {/* Orb (compact, inline) */}
                 <motion.button
                   onClick={() => {
                     if (!isListening) { setPhase('listening'); startListening(); }
                     else stopListening();
                   }}
-                  className="relative z-10 flex items-center justify-center"
+                  className="relative flex-shrink-0 flex items-center justify-center"
                   style={{
-                    width: 84, height: 84,
-                    borderRadius: '50%',
-                    background: isListening
-                      ? 'rgba(239,68,68,0.1)'
-                      : 'rgba(255,255,255,0.07)',
-                    border: `1.5px solid ${isListening ? 'rgba(239,68,68,0.4)' : `${stateColor}40`}`,
-                    backdropFilter: 'blur(24px)',
-                    WebkitBackdropFilter: 'blur(24px)',
-                    boxShadow: `0 0 48px ${stateColor}28, inset 0 1px 0 rgba(255,255,255,0.10)`,
+                    width: 44, height: 44, borderRadius: '50%',
+                    background: isListening ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.07)',
+                    border: `1.5px solid ${isListening ? 'rgba(239,68,68,0.5)' : stateColor + '50'}`,
+                    boxShadow: `0 0 24px ${stateColor}30`,
                   }}
-                  animate={phase === 'thinking' ? { rotate: 360 } : {}}
-                  transition={phase === 'thinking' ? { duration: 2.5, repeat: Infinity, ease: 'linear' } : {}}
-                  whileHover={{ scale: 1.06 }}
-                  whileTap={{ scale: 0.93 }}
+                  animate={isActivePhase ? {
+                    boxShadow: [`0 0 16px ${stateColor}30`, `0 0 32px ${stateColor}60`, `0 0 16px ${stateColor}30`],
+                  } : {}}
+                  transition={{ duration: 1.4, repeat: Infinity }}
+                  whileTap={{ scale: 0.9 }}
                 >
+                  {/* Waveform rings around mini orb */}
+                  {isActivePhase && (
+                    <motion.div className="absolute inset-0 rounded-full"
+                      style={{ border: `1px solid ${stateColor}40` }}
+                      animate={{ scale: [1, 1.8], opacity: [0.5, 0] }}
+                      transition={{ duration: 1.6, repeat: Infinity, ease: 'easeOut' }}
+                    />
+                  )}
                   {phase === 'thinking' ? (
                     <TypingDots color={stateColor} />
                   ) : isListening ? (
-                    // Recording state: red square stop indicator
-                    <motion.span
-                      className="block w-3.5 h-3.5 rounded-sm"
+                    <motion.span className="block w-3 h-3 rounded-sm"
                       style={{ background: '#EF4444' }}
-                      animate={{ opacity: [1, 0.35, 1], scale: [1, 1.15, 1] }}
-                      transition={{ duration: 0.75, repeat: Infinity }}
-                    />
-                  ) : phase === 'speaking' || phase === 'proactive' ? (
-                    <motion.div
-                      animate={{ scale: [1, 1.12, 1] }}
-                      transition={{ duration: 0.9, repeat: Infinity }}
-                    >
-                      <MicSVG color={stateColor} />
-                    </motion.div>
-                  ) : phase === 'confirming' ? (
-                    <span style={{ fontSize: 26 }}>⚡</span>
+                      animate={{ opacity: [1, 0.3, 1] }}
+                      transition={{ duration: 0.7, repeat: Infinity }} />
                   ) : (
-                    <MicSVG color={stateColor} />
+                    <MicSVG color={stateColor} size={20} />
                   )}
                 </motion.button>
-              </div>
-            </div>
 
-            {/* Nav toast */}
-            <AnimatePresence>
-              {navToast && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  className="absolute top-16 self-center flex items-center gap-2 px-4 py-2 rounded-full text-sm font-inter font-semibold z-20"
-                  style={{
-                    background: 'rgba(255,255,255,0.08)',
-                    border: `1px solid ${domainColor}50`,
-                    color: domainColor,
-                    backdropFilter: 'blur(12px)',
-                  }}
-                  onAnimationComplete={() => setTimeout(() => setNavToast(null), 900)}
-                >
-                  <span>{navToast.icon}</span>
-                  <span>Navigating to {navToast.label}</span>
-                  <span style={{ opacity: 0.45 }}>↗</span>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Error banner */}
-            {recogError && (
-              <motion.div
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                className="mx-4 mb-2 px-4 py-2 rounded-xl text-xs font-inter text-center flex-shrink-0"
-                style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.28)', color: '#FCA5A5' }}
-              >
-                Mic error: <strong>{recogError}</strong>
-                {recogError === 'not-allowed' && ' — check browser permissions'}
-                {recogError === 'network' && ' — requires internet connection'}
-              </motion.div>
-            )}
-
-            {/* ── Chat messages — flex-1, scrollable ── */}
-            <div
-              className="flex-1 overflow-y-auto px-4 py-2 space-y-2 min-h-0"
-              style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(147,51,234,0.18) transparent' }}
-            >
-              {turns.map((turn: DialogueTurn, i: number) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 26 }}
-                  className={`flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className="max-w-[85%] px-3.5 py-2.5 rounded-2xl text-xs font-inter leading-relaxed"
-                    style={turn.role === 'user' ? {
-                      background: 'linear-gradient(135deg, rgba(107,33,168,0.5), rgba(59,13,122,0.5))',
-                      border: '1px solid rgba(147,51,234,0.28)',
-                      color: '#E2E8F0',
-                    } : {
-                      background: 'rgba(255,255,255,0.05)',
-                      border: `1px solid ${turn.domain ? DOMAIN_COLORS[turn.domain] + '28' : 'rgba(255,255,255,0.08)'}`,
-                      color: '#E2E8F0',
-                    }}
-                  >
-                    {turn.role === 'user' ? (
-                      <p>{turn.text}</p>
-                    ) : (
-                      <VoiceMsg content={turn.text} />
+                {/* Status text + domain */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <motion.span className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
+                      style={{ background: stateColor }}
+                      animate={{ opacity: isActivePhase ? [1, 0.2, 1] : 1 }}
+                      transition={{ duration: 1, repeat: isActivePhase ? Infinity : 0 }} />
+                    <span className="text-[11px] font-inter font-semibold tracking-widest uppercase"
+                      style={{ color: stateColor, opacity: 0.85 }}>
+                      {PHASE_LABELS[phase]}
+                    </span>
+                    {activeDomain && (
+                      <span className="text-[10px] font-inter px-1.5 py-0.5 rounded-md"
+                        style={{ background: `${domainColor}18`, color: domainColor, border: `1px solid ${domainColor}30` }}>
+                        {activeDomain}
+                      </span>
                     )}
                   </div>
-                </motion.div>
-              ))}
+                </div>
 
-              {/* Live transcript bubble (inline, user side) */}
-              {liveTranscript && (
-                <motion.div
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex justify-end"
+                {/* Close */}
+                <button
+                  onClick={() => { stopAll(); closeVoice(); }}
+                  className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(226,232,240,0.4)' }}
                 >
-                  <div
-                    className="max-w-[85%] px-3.5 py-2.5 rounded-2xl text-xs font-inter"
-                    style={{
-                      background: 'rgba(201,168,76,0.08)',
-                      border: '1px solid rgba(201,168,76,0.26)',
-                      color: '#E2E8F0',
-                    }}
-                  >
-                    {liveTranscript}
-                    <motion.span
-                      className="inline-block w-0.5 h-3 ml-0.5 align-middle rounded-full"
-                      style={{ background: '#C9A84C' }}
-                      animate={{ opacity: [1, 0, 1] }}
-                      transition={{ duration: 0.85, repeat: Infinity }}
-                    />
-                  </div>
-                </motion.div>
-              )}
-
-              {/* Thinking dots */}
-              {phase === 'thinking' && (
-                <motion.div
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex justify-start"
-                >
-                  <div
-                    className="rounded-2xl px-4 py-3"
-                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
-                  >
-                    <TypingDots color={stateColor} />
-                  </div>
-                </motion.div>
-              )}
-
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* ── Confirm bottom-sheet ── */}
-            <AnimatePresence>
-              {showConfirm && confirmItems.length > 0 && (
-                <motion.div
-                  initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-                  transition={{ type: 'spring', stiffness: 280, damping: 28 }}
-                  className="flex-shrink-0 w-full rounded-t-3xl px-6 pt-5 pb-4 z-10"
-                  style={{ background: 'rgba(17,8,48,0.97)', border: '1px solid rgba(147,51,234,0.18)' }}
-                  onClick={e => e.stopPropagation()}
-                >
-                  <p className="font-syne font-black text-sm mb-3" style={{ color: '#E2E8F0' }}>
-                    Here's what I got:
-                  </p>
-                  <div className="divide-y divide-white/5">
-                    {confirmItems.map((item, i) => <ConfirmRow key={i} item={item} />)}
-                  </div>
-                  <div className="flex gap-3 mt-4">
-                    <button
-                      onClick={commitScript}
-                      className="flex-1 py-2.5 rounded-2xl text-sm font-inter font-bold flex items-center justify-center gap-2"
-                      style={{ background: 'linear-gradient(135deg, #3B0D7A, #9333EA)', color: '#fff' }}
-                    >
-                      ⚡ Confirm
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowConfirm(false);
-                        const ctx = buildCtx();
-                        if (activeScript) {
-                          const step = getScriptSteps(activeScript.id, ctx)[activeScript.stepIndex];
-                          const q    = step?.buildQuestion(activeScript.collectedData, ctx) ?? "Let's try again.";
-                          speakThenListen(q);
-                        }
-                      }}
-                      className="px-4 py-2.5 rounded-2xl text-sm font-inter font-semibold"
-                      style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(226,232,240,0.7)', border: '1px solid rgba(255,255,255,0.1)' }}
-                    >
-                      ↩ Edit
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* ── Bottom: compact fixed input bar ── */}
-            {!showConfirm && (
-              <div className="flex-shrink-0 px-4 pb-6 pt-2 z-10">
-                <CompactInputBar
-                  isListening={isListening}
-                  liveTranscript={liveTranscript}
-                  disabled={phase === 'thinking' || phase === 'speaking'}
-                  onMicToggle={() => {
-                    if (!isListening) { setPhase('listening'); startListening(); }
-                    else stopListening();
-                  }}
-                  onSend={(text) => handleSendRef.current(text)}
-                />
+                  <X size={13} />
+                </button>
               </div>
-            )}
-          </motion.div>
+
+              {/* Nav toast */}
+              <AnimatePresence>
+                {navToast && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="mx-4 mb-1 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-inter font-semibold self-start z-20"
+                    style={{
+                      background: 'rgba(255,255,255,0.07)',
+                      border: `1px solid ${domainColor}45`,
+                      color: domainColor,
+                    }}
+                    onAnimationComplete={() => setTimeout(() => setNavToast(null), 900)}
+                  >
+                    <span>{navToast.icon}</span>
+                    <span>Going to {navToast.label} ↗</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Error */}
+              {recogError && (
+                <div className="mx-4 mb-1 px-3 py-1.5 rounded-lg text-[11px] font-inter text-center flex-shrink-0"
+                  style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)', color: '#FCA5A5' }}>
+                  Mic: <strong>{recogError}</strong>
+                  {recogError === 'not-allowed' && ' — check permissions'}
+                </div>
+              )}
+
+              {/* ── Chat messages ── */}
+              <div
+                className="flex-1 overflow-y-auto px-4 py-2 space-y-2 min-h-0"
+                style={{ scrollbarWidth: 'none' }}
+              >
+                {turns.map((turn: DialogueTurn, i: number) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+                    className={`flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className="max-w-[85%] px-3 py-2 rounded-2xl text-xs font-inter leading-relaxed"
+                      style={turn.role === 'user' ? {
+                        background: 'linear-gradient(135deg, rgba(107,33,168,0.45), rgba(59,13,122,0.45))',
+                        border: '1px solid rgba(147,51,234,0.25)',
+                        color: '#E2E8F0',
+                      } : {
+                        background: 'rgba(255,255,255,0.05)',
+                        border: `1px solid ${turn.domain ? DOMAIN_COLORS[turn.domain] + '25' : 'rgba(255,255,255,0.07)'}`,
+                        color: '#E2E8F0',
+                      }}
+                    >
+                      {turn.role === 'user' ? <p>{turn.text}</p> : <VoiceMsg content={turn.text} />}
+                    </div>
+                  </motion.div>
+                ))}
+
+                {liveTranscript && (
+                  <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="flex justify-end">
+                    <div className="max-w-[85%] px-3 py-2 rounded-2xl text-xs font-inter"
+                      style={{ background: 'rgba(201,168,76,0.07)', border: '1px solid rgba(201,168,76,0.22)', color: '#E2E8F0' }}>
+                      {liveTranscript}
+                      <motion.span className="inline-block w-0.5 h-3 ml-0.5 align-middle rounded-full"
+                        style={{ background: '#C9A84C' }}
+                        animate={{ opacity: [1, 0, 1] }}
+                        transition={{ duration: 0.85, repeat: Infinity }} />
+                    </div>
+                  </motion.div>
+                )}
+
+                {phase === 'thinking' && (
+                  <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
+                    <div className="rounded-2xl px-4 py-2.5"
+                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <TypingDots color={stateColor} />
+                    </div>
+                  </motion.div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* ── Confirm sheet (inside panel) ── */}
+              <AnimatePresence>
+                {showConfirm && confirmItems.length > 0 && (
+                  <motion.div
+                    initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                    className="flex-shrink-0 px-5 pt-4 pb-3"
+                    style={{ background: 'rgba(14,6,36,0.98)', borderTop: '1px solid rgba(147,51,234,0.16)' }}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <p className="font-syne font-black text-sm mb-2.5" style={{ color: '#E2E8F0' }}>Here's what I got:</p>
+                    <div className="divide-y divide-white/5 mb-3">
+                      {confirmItems.map((item, i) => <ConfirmRow key={i} item={item} />)}
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={commitScript}
+                        className="flex-1 py-2 rounded-xl text-sm font-inter font-bold flex items-center justify-center gap-1.5"
+                        style={{ background: 'linear-gradient(135deg, #3B0D7A, #9333EA)', color: '#fff' }}>
+                        ⚡ Confirm
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowConfirm(false);
+                          const ctx = buildCtx();
+                          if (activeScript) {
+                            const step = getScriptSteps(activeScript.id, ctx)[activeScript.stepIndex];
+                            speakThenListen(step?.buildQuestion(activeScript.collectedData, ctx) ?? "Let's try again.");
+                          }
+                        }}
+                        className="px-4 py-2 rounded-xl text-sm font-inter font-semibold"
+                        style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(226,232,240,0.65)', border: '1px solid rgba(255,255,255,0.09)' }}>
+                        ↩ Edit
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* ── Input bar ── */}
+              {!showConfirm && (
+                <div className="flex-shrink-0 px-4 pb-5 pt-1.5">
+                  <CompactInputBar
+                    isListening={isListening}
+                    liveTranscript={liveTranscript}
+                    disabled={phase === 'thinking' || phase === 'speaking'}
+                    onMicToggle={() => {
+                      if (!isListening) { setPhase('listening'); startListening(); }
+                      else stopListening();
+                    }}
+                    onSend={(text) => handleSendRef.current(text)}
+                  />
+                </div>
+              )}
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 

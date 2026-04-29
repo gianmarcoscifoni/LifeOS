@@ -79,6 +79,28 @@ public static class StreakEndpoints
                 profile.UpdatedAt   = DateTime.UtcNow;
             }
 
+            // Record memory for milestones and weekly streaks
+            if (hit is not null)
+            {
+                db.ContextMemories.Add(new Models.ContextMemory
+                {
+                    Category   = "streak",
+                    Fact       = $"Unlocked '{hit.Name}' milestone — {hit.Days}-day streak ({hit.XpReward} XP)",
+                    Importance = 5,
+                    CreatedAt  = DateTime.UtcNow,
+                });
+            }
+            else if (streakDay % 7 == 0)
+            {
+                db.ContextMemories.Add(new Models.ContextMemory
+                {
+                    Category   = "streak",
+                    Fact       = $"Reached {streakDay}-day streak",
+                    Importance = 3,
+                    CreatedAt  = DateTime.UtcNow,
+                });
+            }
+
             await db.SaveChangesAsync();
             return Results.Ok(await BuildState(db, today, baseXp + (hit?.XpReward ?? 0), hit is null ? null : new {
                 hit.Days, hit.Name, hit.Icon, hit.XpReward, hit.Color,

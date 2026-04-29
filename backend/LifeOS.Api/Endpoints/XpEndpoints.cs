@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using LifeOS.Api.Data;
 using LifeOS.Api.Models;
 using LifeOS.Api.Services;
+using Microsoft.AspNetCore.Mvc;
 
 namespace LifeOS.Api.Endpoints;
 
@@ -56,9 +57,50 @@ public static class XpEndpoints
             profile.UpdatedAt   = DateTime.UtcNow;
 
             await db.SaveChangesAsync();
+
+            // Record memory fact if task was done (important milestone worth remembering)
+            if (req.IsTaskDone)
+            {
+                db.ContextMemories.Add(new ContextMemory
+                {
+                    Category  = req.Domain,
+                    Fact      = $"Completed task '{req.Action}' (+{earned} XP, ×2 bonus)",
+                    Importance = 4,
+                    CreatedAt  = DateTime.UtcNow,
+                });
+                await db.SaveChangesAsync();
+            }
+
             return Results.Ok(new { xpEarned = earned, newTotalXp = profile.TotalXp, globalLevel = profile.GlobalLevel, tier = profile.Tier });
         }).WithName("QuickLogXp");
+
+        // Add a raw memory fact to the context DB
+        group.MapPost("/memory", async (MemoryRequest req, LifeOsDbContext db) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.Fact)) return Results.BadRequest("Fact cannot be empty.");
+            db.ContextMemories.Add(new ContextMemory
+            {
+                Category  = req.Category,
+                Fact      = req.Fact.Trim(),
+                Importance = Math.Clamp(req.Importance, 1, 5),
+                CreatedAt  = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+            return Results.Ok(new { ok = true });
+        }).WithName("AddMemory");
+
+        // Get recent memory facts (for display in UI)
+        group.MapGet("/memory", async (LifeOsDbContext db, int? limit) =>
+        {
+            var facts = await db.ContextMemories
+                .OrderByDescending(m => m.CreatedAt)
+                .Take(limit ?? 50)
+                .Select(m => new { m.Id, m.Category, m.Fact, m.Importance, m.CreatedAt })
+                .ToListAsync();
+            return Results.Ok(facts);
+        }).WithName("GetMemory");
     }
 }
 
 public record QuickXpRequest(string Action, string Domain, int XpBase, bool IsTaskDone = false);
+public record MemoryRequest(string Category, string Fact, int Importance = 3);
