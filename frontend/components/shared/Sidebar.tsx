@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Briefcase, Activity, DollarSign,
   Zap, FileText, BookOpen, Bot, Heart, Star,
-  LogIn, LogOut, X, Menu, Camera,
+  LogIn, LogOut, X, Menu, Camera, BarChart2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -23,6 +23,7 @@ const navItems = [
   { href: '/career',     label: 'Career',         icon: Briefcase },
   { href: '/journal',    label: 'Journal',        icon: BookOpen },
   { href: '/claude',     label: 'Ask Claude',     icon: Bot },
+  { href: '/reports',    label: 'Reports',        icon: BarChart2 },
 ];
 
 const ACCENT: Record<string, string> = {

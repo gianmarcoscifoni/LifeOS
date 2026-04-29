@@ -10,6 +10,7 @@ import { XpFloater } from '@/components/voice/XpFloater';
 import { VoiceAmbientGlow } from '@/components/voice/VoiceAmbientGlow';
 import { LetMeCook } from '@/components/shared/LetMeCook';
 import { GlobalLoader } from '@/components/shared/GlobalLoader';
+import { TimeTracker } from '@/components/shared/TimeTracker';
 
 // Syne — ultra-sharp, futuristic headings (Zara / Apple vibes)
 const syne = Syne({
@@ -59,6 +60,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <XpFloater />
           <LetMeCook />
           <GlobalLoader />
+          <TimeTracker />
         </Providers>
       </body>
     </html>
