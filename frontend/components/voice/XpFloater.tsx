@@ -72,7 +72,7 @@ export function XpFloater() {
 
       // Base XP from labels
       const baseXp = batch.reduce((sum, r) => {
-        const n = r.xpBase ?? parseInt(r.label.replace(/[^0-9]/g, ''), 10) || 0;
+        const n = (r.xpBase ?? parseInt(r.label.replace(/[^0-9]/g, ''), 10)) || 0;
         return sum + n;
       }, 0);
 
